@@ -1,0 +1,12 @@
+# @format
+# docker-compose.yml
+version: '3.8'
+services:
+    pilot:
+        image: nvidia/cuda:11.8-runtime-ubuntu24.04
+        runtime: nvidia
+        working_dir: /app
+        volumes:
+            - ./pilot-code:/app
+            - ~/pilot-env/hf_cache:/root/.cache/huggingface
+        command: bash -lc "conda activate pilot && python run_pilot.py"
