@@ -1,3 +1,4 @@
+# src/reward_system.py
 def compute_complexity_reward(pred_steps, ref_steps, theta=0.02):
     rel_err = abs(len(pred_steps) - len(ref_steps)) / len(ref_steps)
     return 1 if rel_err < theta else 0

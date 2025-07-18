@@ -1,3 +1,4 @@
+# models.py
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
 def load_local_llm(model_name="llama-3-8b"):

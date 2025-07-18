@@ -1,4 +1,4 @@
-// eviroment_settings.md
+<!-- configs/eviroment_settings.md -->
 
 # H/W
 CPU: AMD Ryzen 9 3900X
