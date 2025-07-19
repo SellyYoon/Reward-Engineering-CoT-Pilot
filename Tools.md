@@ -2,7 +2,7 @@
 <!-- @format -->
 
 -   OS: WSL-Ubuntu 2.0 x86_64
--   NVIDIA: NVIDIA-SMI 570.169 / Driver Version: 576.02 / CUDA Version: 12.9
+-   NVIDIA: NVIDIA-SMI 575.57.08              Driver Version: 576.02         CUDA Version: 12.9
 -   wget https://developer.download.nvidia.com/compute/cuda/repos/wsl-ubuntu/x86_64/cuda-wsl-ubuntu.pin
 -   sudo mv cuda-wsl-ubuntu.pin /etc/apt/preferences.d/cuda-repository-pin-600
 -   wget https://developer.download.nvidia.com/compute/cuda/12.9.1/local_installers/cuda-repo-wsl-ubuntu-12-9-local_12.9.1-1_amd64.deb
@@ -113,22 +113,7 @@ export OPENAI_API_KEY="sk-…"
 export ANTHROPIC_API_KEY="…" 
 export HF_HOME=~/pilot-env/hf_cache
 
-3. Docker 컨테이너 준비 (선택)
-
-장점: 의존성 격리, 재현성 확보간단 예시 (docker-compose.yml) yaml
-
-# pilot/docker-compose.yml
-version: '3.8'
-services:
-    pilot:
-        image: nvidia/cuda:11.8-runtime-ubuntu24.04
-        runtime: nvidia
-        working_dir: /app
-        volumes:
-            - ./pilot-code:/app
-            - ~/pilot-env/hf_cache:/root/.cache/huggingface
-        command: bash -lc "conda activate pilot && python run_pilot.py"
-
+3. Docker 컨테이너 준비 
 컨테이너 빌드·실행 bash docker-compose build docker-compose up -d
 
 4. API 호출 / Local LLM 세팅 API 모델 
@@ -142,6 +127,15 @@ Local LLM (양자화)
 
 bitsandbytes + transformers 
 pip install torch transformers accelerate bitsandbytes
+Llama3.1-8B-Instruct
+https://github.com/meta-llama/llama3
+pip install llama-stack
+llama model download --source meta --model-id Llama3.1-8B-Instruct
+https://llama3-1.llamameta.net/*?Policy=eyJTdGF0ZW1lbnQiOlt7InVuaXF1ZV9oYXNoIjoibnh6NG44eHNwejk1ajB1MG1xNHdlNm16IiwiUmVzb3VyY2UiOiJodHRwczpcL1wvbGxhbWEzLTEubGxhbWFtZXRhLm5ldFwvKiIsIkNvbmRpdGlvbiI6eyJEYXRlTGVzc1RoYW4iOnsiQVdTOkVwb2NoVGltZSI6MTc1MzA3MTcyOH19fV19&Signature=onSEhDQzmW5dM7m03NPWFKygkbUH6aEdkZYSpBEUbwmrDC9NOzRL2lCYTPWsLLOlLtSPOPpVB7LWfkvhgW%7EJzZRbRrgOqiYUL4OdIOPQC88QTjygHtgsLD3JWdPTBwAbrrXjgv2SQ2S-%7EkucmIBMIZlYik7wDIaYtOISaT2KTw5k%7EhH6Af296OWmnFy8sl2aXnS1jARwMucrpd8GhCU%7E6mb0PijEITMDXI%7EEcCdNHOf-pZd4tm3DvraeCx0FrvxxOp4890C64Q-Mw8xD5GGvfQhntEe4mhEvdftdhFMAyDRxzaGUsIS4UIMeb3p52sX%7E%7EIQLi-V7dnrW479PXlYnWw__&Key-Pair-Id=K15QRJLYKIFSLZ&Download-Request-ID=772930131852463
+mistralai/Mistral-7B-Instruct-v0.3
+https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.3
+pip install mistral_inference
+
 
 모델 로드 예시 
 python 

@@ -1,6 +1,34 @@
 # src/dataset_loader.py
-from datasets import load_dataset
-from configs.settings import HF_DATASET_REPO
+# Loads and standardizes the master problem set from the Hugging Face Hub.
 
-def load_master_set(split="train"):
-    return load_dataset(HF_DATASET_REPO, split=split)
+from functools import lru_cache
+from datasets import load_dataset, Dataset
+from configs import settings
+
+@lru_cache(maxsize=1)
+def load_master_dataset(split="train"):
+    return load_dataset(settings.HF_DATASET_REPO, split=split)
+        
+def get_reference_counts(question_num: int) -> dict:
+    ds = load_master_dataset()
+    ic = ds[question_num]["instruction_complexity"]
+    return {
+        "branch_count": ic.get("branch_count", 0),
+        "loop_count":   ic.get("loop_count", 0),
+        "variable_count":ic.get("variable_count", 0)
+    }
+
+# --- Independent Test Block ---
+# This allows you to test this module by running `python src/dataset_loader.py`
+if __name__ == "__main__":
+    print("--- Testing dataset_loader.py ---")
+    master_dataset = load_master_dataset()
+    
+    if master_dataset:
+        print("\n--- First example from the dataset ---")
+        first_example = master_dataset[0]
+        print(first_example)
+        
+        # Verify that standardized column names exist
+        assert 'Question' in first_example, "Standardized 'Question' column not found!"
+        print("\nTest passed: Dataset loaded and columns seem correct.")

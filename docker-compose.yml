@@ -2,11 +2,71 @@
 # docker-compose.yml
 version: '3.8'
 services:
-    pilot:
-        image: nvidia/cuda:11.8-runtime-ubuntu24.04
+    sbx1:
+        container_name: sbx1_o4mini
+        SBX_ID: 1,
+        image: nvidia/cuda:12.9-runtime-ubuntu24.04
         runtime: nvidia
-        working_dir: /app
+        env_file:
+            - ../.env
+        environment:
+        MODEL_NAME: o4-mini-2025-04-16
+        CONDITION: ${CONDITION}
         volumes:
-            - ./pilot-code:/app
-            - ~/pilot-env/hf_cache:/root/.cache/huggingface
-        command: bash -lc "conda activate pilot && python run_pilot.py"
+            - ../:/app
+            - ../logs:/app/logs
+            - ../backups:/app/backups
+        working_dir: /app
+        command: bash -lc "conda activate pilot && python main.py --model ${MODEL_NAME} --condition ${CONDITION}"
+
+    sbx2:
+        container_name: sbx2_claude4
+        SBX_ID: 2,
+        image: nvidia/cuda:12.9-runtime-ubuntu24.04
+        runtime: nvidia
+        env_file:
+            - ../.env
+        environment:
+        MODEL_NAME: claude-sonnet-4-20250514
+        CONDITION: ${CONDITION}
+        volumes:
+            - ../pilot-code:/app
+            - ../logs:/app/logs
+            - ../backups:/app/backups
+        working_dir: /app
+        command: bash -lc "conda activate pilot && python main.py --model ${MODEL_NAME} --condition ${CONDITION}"
+
+    sbx3:
+        container_name: sbx3_llama3
+        SBX_ID: 3,
+        image: nvidia/cuda:12.9-runtime-ubuntu24.04
+        runtime: nvidia
+        env_file:
+            - ../.env
+        environment:
+        MODEL_NAME: Llama3.1-8B-Instruct
+        CONDITION: ${CONDITION}
+        volumes:
+            - ../pilot-code:/app
+            - ../logs:/app/logs
+            - ../backups:/app/backups
+        working_dir: /app
+        command: bash -lc "conda activate pilot && python main.py --model ${MODEL_NAME} --condition ${CONDITION}"
+
+    sbx4:
+        container_name: sbx4_mistral7b
+        SBX_ID: 4,
+        image: nvidia/cuda:12.9-runtime-ubuntu24.04
+        runtime: nvidia
+        env_file:
+            - ../.env
+        environment:
+        MODEL_NAME: Mistral-7B-Instruct-v0.3
+        CONDITION: ${CONDITION}
+        volumes:
+            - ../pilot-code:/app
+            - ../logs:/app/logs
+            - ../backups:/app/backups
+        working_dir: /app
+        command: bash -lc "conda activate pilot && python main.py --model ${MODEL_NAME} --condition ${CONDITION}"
+
