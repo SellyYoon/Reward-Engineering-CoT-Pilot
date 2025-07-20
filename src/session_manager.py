@@ -1,30 +1,51 @@
-import os, json
-import configs.settings
+# src/session_manager.py
+import json
+import os
+from configs import settings
 
 # 백업/로그 폴더는 Docker-Compose에서 volume 으로 마운트된 경로를 사용
-BACKUP_DIR = configs.settings.BACKUP_DIR
+BACKUP_DIR = settings.BACKUP_DIR
 STATE_FILE = os.path.join(BACKUP_DIR, f"{os.environ['MODEL_NAME']}_session.json")
 
-def _load_state():
-    if os.path.exists(STATE_FILE):
-        return json.load(open(STATE_FILE, "r"))
-    return {"trial": 0}
+def load_state(sbx_id: int) -> dict:
+    """Load the state for a specific SBX_ID from a file."""
+    state_file = os.path.join(settings.BACKUP_DIR, f"session_state_sbx{sbx_id}.json")
+    if os.path.exists(state_file):
+        with open(state_file, "r") as f:
+            return json.load(f)
+    return {"current_trial": 0} # Return default if no state file exists
 
-def _save_state(state):
-    with open(STATE_FILE, "w") as f:
+def save_state(sbx_id: int, state: dict):
+    """Save the state for a specific SBX_ID to a file."""
+    state_file = os.path.join(settings.BACKUP_DIR, f"session_state_sbx{sbx_id}.json")
+    with open(state_file, "w") as f:
         json.dump(state, f)
 
-def next_session():
+def next_session(sbx_id: int, model_name: str) -> dict:
     """
-    반환:
-      session_id: int (e.g. 105)
-      trial     : int (1부터 시작, 실행 시마다 ++)
+    Sets up the configuration for the next trial.
+    - Increments the trial number.
+    - Creates a unique session ID.
+    - Determines the condition.
+    - Returns all config as a dictionary.
     """
-    sbx_id = int(os.environ["SBX_ID"])
-    state = _load_state()
-    state["trial"] += 1
-    _save_state(state)
+    state = load_state(sbx_id)
+    
+    # Increment trial number and save the new state
+    trial = state["current_trial"] + 1
+    save_state(sbx_id, {"current_trial": trial})
 
-    trial = state["trial"]
+    # Create session_id (e.g., SBX 1, Trial 5 -> "105")
     session_id = sbx_id * 100 + trial
-    return session_id, trial
+    
+    # Determine condition (A,B,C,D)
+    condition = settings.determine_condition(trial)
+    
+    return {
+        "session_id": session_id,
+        "sbx_id": sbx_id,
+        "trial_num": trial,
+        "model_name": model_name,
+        "condition": condition,
+        "seed": settings.DEFAULT_SEED
+    }

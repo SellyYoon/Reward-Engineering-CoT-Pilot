@@ -2,7 +2,7 @@
 # Loads and standardizes the master problem set from the Hugging Face Hub.
 
 from functools import lru_cache
-from datasets import load_dataset, Dataset
+from datasets import load_dataset
 from configs import settings
 
 @lru_cache(maxsize=1)

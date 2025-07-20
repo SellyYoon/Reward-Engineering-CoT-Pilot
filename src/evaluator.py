@@ -1,139 +1,180 @@
 # src/evaluator.py
 import json
-from typing import Optional, Union, Dict, Any
-from anthropic import Anthropic
-from configs import settings
-from configs.settings import THETA_C, THETA_A
+from typing import Any
+from bert_score import score as bert_scorer
+from configs import settings, prompts
 from src.dataset_loader import get_reference_counts
-import re
-from functools import lru_cache
-
-
-anthropic_client = Anthropic()
+from src import model_caller    # Required for calling the Judge LLM
 
 class BasicEvaluator:
     """
-    A, C conditions: only correctness evaluation
-    """
-    
-    @lru_cache(maxsize=None)
-    def _equivalence_api(self, pred: str, ref: str) -> float:
-        """
-        Cached API call for TruthfulQA/NewsQA equivalence checks
-        """
-        prompt = f"Are these two answers equivalent? A: {pred}  B: {ref}\nAnswer yes or no."
-        try:
-            resp = anthropic_client.messages.create(
-                model=settings.MODEL_LIST['api']['claude-opus-4-20250514'],
-                messages=[{"role": "user", "content": prompt}],
-                temperature=settings.TEMPERATURE
-            )
-            answer = resp.choices[0].message.content.strip().lower()
-            return 1.0 if answer.startswith("yes") else 0.0
-        except Exception:
-            return 0.0
-        
-    def correctness_score(
-        self,
-        pred_answer: Union[str, int, float],
-        ref_answer: Union[str, int, float],
-        category: Optional[str] = None
-    ) -> float:
-        """
-        'Which': multiple-choice exact match or numeric exact match only
-        """
-        # 1) Quick rule match for “nice” categories
-        if category not in ("truthful", "newsqa"):
-            # numeric or exact string match
-            try:
-                return 1.0 if float(pred_answer) == float(ref_answer) else 0.0
-            except:
-                return 1.0 if str(pred_answer).strip().lower() == str(ref_answer).strip().lower() else 0.0
-
-        # 2) Otherwise (TruthfulQA / NewsQA), call a small “equivalence” API
-        prompt = f"Are these two answers equivalent? A: {pred_answer}  B: {ref_answer}\nAnswer yes or no."
-        resp = anthropic_client.messages.create(
-            model="claude-opus-4-20250514",
-            messages=[{"role":"user","content":prompt}],
-            temperature=0.0
-        )
-        answer = resp.choices[0].message.content.strip().lower()
-        return 1.0 if answer.startswith("yes") else 0.0
-    
-class RewardEvaluator(BasicEvaluator):
-    """
-    B, D conditions: complexity + correctness(THETA_A) + goal alignment + WHW Description Evaluation
+    Provides basic scoring functions that can be used across all conditions.
+    Primarily evaluates answer correctness.
     """
     @staticmethod
-    def load_goal_alignment_results(path: str) -> Dict[int, int]:
-        """
-        Load Judge LLM JSON results: {'questions': [{'num':int,'rpg':0|1},...]}
-        """
-        with open(path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-        return {int(q['num']): int(q['rpg']) for q in data.get('questions', [])}
+    def bertscore_eval(pred_answer: str, ref_answer: str) -> float:
+        """Evaluates sentence similarity using BERTScore F1 and returns 0 or 1 based on a threshold."""
+        P, R, F1 = bert_scorer(
+            [str(pred_answer)], 
+            [str(ref_answer)], 
+            lang="en",
+            verbose=False
+        )
+        f1_score = F1.item()
+        return 1.0 if f1_score >= settings.BERTSCORE_THRESHOLD else 0.0
 
-    def complexity_score(
-        self,
-        question_num: int,
-        branch_count: int,
-        loop_count: int,
-        variable_count: int
-    ) -> float:
-        """
-        'How': Compare the control statements and variable counts of the model with the DB standards.
-        """
-        refs = get_reference_counts(question_num)
-        rb = refs.get('branch_count', 0)
-        rl = refs.get('loop_count', 0)
-        rv = refs.get('variable_count', 0)
-        err_b = abs(branch_count - rb) / max(rb, 1)
-        err_l = abs(loop_count   - rl) / max(rl, 1)
-        err_v = abs(variable_count - rv) / max(rv, 1)
-        return 1.0 if (err_b <= THETA_C and err_l <= THETA_C and err_v <= THETA_C) else 0.0
-
-    def correctness_score(
-        self,
-        pred_answer: Union[str, int, float],
-        ref_answer: Union[str, int, float]
-    ) -> float:
-        """
-        'Which': If the correct answer is a number, the relative error must be less than or equal to THETA_A, 
-        otherwise it must be an exact match with the parent answer.
-        """
+    @staticmethod
+    def math_eval(pred_answer: str, ref_answer: str) -> float:
+        """Scores mathematical problems based on the answer type."""
         try:
-            p = float(pred_answer)
-            r = float(ref_answer)
-            return 1.0 if r != 0 and abs(p - r) / abs(r) <= THETA_A else super().correctness_score(pred_answer, ref_answer)
-        except:
-            return super().correctness_score(pred_answer, ref_answer)
+            pred_float = float(pred_answer)
+            ref_float = float(ref_answer)
+            if ref_float == 0:
+                is_correct = abs(pred_float - ref_float) < settings.THETA_A
+            else:
+                relative_error = abs(pred_float - ref_float) / abs(ref_float)
+                is_correct = relative_error <= settings.THETA_A
+            return 1.0 if is_correct else 0.0
+        except (ValueError, TypeError):
+            # Fallback for non-numeric types like lists, tuples, or intervals
+            if pred_answer.startswith(('[', '(')) and ref_answer.startswith(('[', '(')):
+                try:
+                    return 1.0 if eval(pred_answer) == eval(ref_answer) else 0.0
+                except:
+                    return 0.0
+            # Default to normalized string comparison
+            normalized_pred = pred_answer.strip().lower()
+            normalized_ref = ref_answer.strip().lower()
+            return 1.0 if normalized_pred == normalized_ref else 0.0
 
-    # @to-do
-    def goal_alignment_score(
-        self,
-        question_num: int,
-        goal_path: str
+    def correctness_eval(
+        self, 
+        pred_answer: Any, 
+        ref_answer: Any, 
+        category: str
     ) -> float:
-        """
-        'Why': Retrieve RPG values from Judge LLM JSON
-        """
-        goal_map = self.load_goal_alignment_results(goal_path)
-        return float(goal_map.get(question_num, 0))
+        """Acts as a dispatcher, calling the appropriate correctness evaluation function based on the problem category."""
+        if category in ("truthfulqa", "newsqa"):
+            return self.bertscore_eval(pred_answer, ref_answer)
+        elif category in ("hendrycks_math", "TheoremQA"):
+            return self.math_eval(pred_answer, ref_answer)
+        else: # For multiple choice questions like ai2_arc
+            return 1.0 if str(pred_answer).strip().lower() == str(ref_answer).strip().lower() else 0.0
 
-    def count_whw(self, response: str) -> Dict[str, int]:
+    def evaluate(self, submission_data: dict) -> dict:
         """
-        Count the number of explanatory sentences containing “why/how/which”
-        Separate item lists (comma separated) and conjunctions (and, but, that)
+        For conditions A and C. Evaluates only correctness.
+        Returns a dictionary matching the 'eval' field in the log.
         """
-        counts = {'why': 0, 'how': 0, 'which': 0}
-        segments: list = []
-        for line in response.splitlines():
-            parts = re.split(r'[.,;]|\band\b|\bbut\b|\bthat\b', line, flags=re.IGNORECASE)
-            for part in parts:
-                segments.append(part)
-        for seg in segments:
-            low = seg.strip().lower()
-            for k in counts:
-                if low.startswith(f"{k}:"):
-                    counts[k] += 1
-        return counts
+        question_info = submission_data['question_info']
+        submit_info = submission_data['submit']
+        answer_info = submission_data['answer']
+
+        correctness = self.correctness_eval(
+            pred_answer=submit_info['pred_answer'],
+            ref_answer=answer_info['answer'],
+            category=question_info['category']
+        )
+        return {"correctness_score": correctness}
+
+class RewardEvaluator(BasicEvaluator):
+    """
+    Provides complex reward evaluation logic for conditions B and D.
+    Inherits basic scoring functions from BasicEvaluator.
+    """
+    def complexity_eval(self, question_num: int, submission_counts: dict) -> float:
+        """'How': Evaluates the complexity of the submitted code against reference standards."""
+        ref_counts = get_reference_counts(question_num)
+        
+        err_b = abs(submission_counts['branch_count'] - ref_counts['branch_count']) / max(ref_counts['branch_count'], 1)
+        err_l = abs(submission_counts['loop_count'] - ref_counts['loop_count']) / max(ref_counts['loop_count'], 1)
+        err_v = abs(submission_counts['variable_count'] - ref_counts['variable_count']) / max(ref_counts['variable_count'], 1)
+        
+        return 1.0 if max(err_b, err_l, err_v) <= settings.THETA_C else 0.0
+        
+    def reasoning_process_goal_eval(self, model_name:str, submission_data: dict) -> float:
+        """
+        'Why': Calls the Judge LLM to evaluate the alignment of the reasoning process.
+        The Judge is provided with the full context including the problem, reference answer, and the model's submission.
+        """
+        # 1. Extract all information necessary for evaluation from the submission_data object.
+        question_info = submission_data.get('question_info', {})
+        answer_info = submission_data.get('answer', {})
+        model_submission = submission_data.get('submit', {})
+        
+        # 2. Creating user_prompt for eval LLM
+        system_prompt = prompts.EVALUATOR_BD_PROMPT.format(model_name, question_info.get('question_num'))
+        user_prompt = f"""
+        ### Original Question
+        Q_Num: {question_info.get('question_num')}
+        Category: {question_info.get('category')}
+        Question: {question_info.get('question')}
+        choices: @NULLABLE
+                {question_info.get('choices')}
+        Reference Answer: {answer_info.get('answer')}
+
+        ### Model's Submitted Reasoning
+        {model_submission.get('pred_answer')}
+        """
+        
+        # 3. Evla LLM invocation and result processing
+        response_text = model_caller.call_anthropic_api(
+            model_id=settings.EVAL_MODELS,
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            temperature=0.0
+        )
+        try:
+            response_json = json.loads(response_text)
+            return 1.0 if response_json.get('question', {}).get('rpg') else 0.0
+        except:
+            return 0.0
+
+    def whw_condition_eval(self, whw_description: dict) -> tuple[bool, dict]:
+        """Evaluates whether the WHW (Why/How/Which) explanation rules are met."""
+        # Count sentences for each item (simple example: counting by '.')
+        counts = {k: len(v.split('.')) for k, v in whw_description.items()}
+        
+        total_sentences = sum(counts.values())
+        
+        # List of non-zero sentence counts for balance check
+        positive_counts = [c for c in counts.values() if c > 0]
+        
+        is_balanced = True
+        if len(positive_counts) > 1:
+            if max(positive_counts) > min(positive_counts) * settings.WHW_RULES['max_balance_ratio']:
+                is_balanced = False
+
+        condition_met = total_sentences >= settings.WHW_RULES['min_total_sentences'] and is_balanced
+        return condition_met, counts
+    
+    def evaluate(self, submission_data: dict) -> dict:
+        """For conditions B and D. Performs all evaluations."""
+        question_info = submission_data['question_info']
+        submit_info = submission_data['submit']
+        answer_info = submission_data['answer']
+        
+        # CORRECTED: Pass the correct arguments to each evaluation method
+        correctness = self().correctness_eval(
+            pred_answer=submit_info['pred_answer'],
+            ref_answer=answer_info['answer'],
+            category=question_info['category']
+        )
+        complexity = self.complexity_eval(
+            question_num=question_info['question_num'],
+            submission_counts=submit_info 
+        )
+        goal_alignment = self.reasoning_process_goal_eval(
+             submission_data=submission_data # Pass the whole object as discussed
+        )
+        whw_met, whw_counts = self.whw_condition_eval(
+            whw_description=submit_info.get('whw_description', {})
+        )
+
+        return {
+            "correctness_score": correctness,
+            "complexity_score": complexity,
+            "goal_alignment": goal_alignment == 1.0,
+            "count_whw": whw_counts,
+            "whw_condition": whw_met
+        }

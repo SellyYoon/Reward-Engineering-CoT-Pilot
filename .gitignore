@@ -6,8 +6,9 @@ results/
 *.log
 
 # Ignore sensitive environment files
-*.env
+
 Tools.md
+Workflow.md
 
 # Optional: ignore Python cache and virtual environments
 __pycache__/
