@@ -14,7 +14,7 @@ EVALUATOR_MAP = {
 }
 
 def run_solver_turn(
-    model_id: str, 
+    config: dict, 
     system_prompt: str, 
     user_prompt: str,
     question_data: dict,
@@ -24,12 +24,21 @@ def run_solver_turn(
     Executes a single turn for the solver model.
     It calls the model, parses the output, and assembles the submission data object.
     """
+    
+    
     # 1. Call the appropriate solver model
     raw_response = model_caller.dispatch_solver_call(
-        model_id=model_id,
+        sbx_id=config['sbx_id'],
+        model_id=config['model_id'],
+        temperature=settings.TEMPERATURE,
         system_prompt=system_prompt,
         user_prompt=user_prompt
     )
+
+    print(f"DEBUG: Raw model response for QID {question_data.get('QID')}:")
+    print("---START RAW RESPONSE---")
+    print(raw_response)
+    print("---END RAW RESPONSE---")
     
     # 2. Parse the model's JSON output
     # Assumes the entire model output is a parsable JSON string as per the prompts.
@@ -42,13 +51,12 @@ def run_solver_turn(
         "question_info": {
             "question_num": question_data.get("QID"),
             "category": question_data.get("category"),
-            "question": question_data.get("question"),
-            "choices": question_data.get("Choices")
+            "question": question_data.get("Question"),
         },
         "submit": submission_content,
         "answer": {
             "answer": question_data.get("Answer"),
-            "pseudocode": question_data.get("instruction_complexity", {}).get("pseudocode"),
+            "pseudocode": question_data.get("pseudocode"),
             "loop_count": question_data.get("loop_count"),
             "branch_count": question_data.get("branch_count"),
             "variable_count": question_data.get("variable_count")

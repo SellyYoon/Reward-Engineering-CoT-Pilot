@@ -14,9 +14,16 @@ class BasicEvaluator:
     @staticmethod
     def bertscore_eval(pred_answer: str, ref_answer: str) -> float:
         """Evaluates sentence similarity using BERTScore F1 and returns 0 or 1 based on a threshold."""
+        # Ensure inputs are strings and not None
+        pred_answer_str = str(pred_answer) if pred_answer is not None else ""
+        ref_answer_str = str(ref_answer) if ref_answer is not None else ""
+
+        if not pred_answer_str or not ref_answer_str: # Handle empty strings
+            return 0.0
+
         P, R, F1 = bert_scorer(
-            [str(pred_answer)], 
-            [str(ref_answer)], 
+            [pred_answer_str], 
+            [ref_answer_str], 
             lang="en",
             verbose=False
         )
@@ -37,14 +44,22 @@ class BasicEvaluator:
             return 1.0 if is_correct else 0.0
         except (ValueError, TypeError):
             # Fallback for non-numeric types like lists, tuples, or intervals
-            if pred_answer.startswith(('[', '(')) and ref_answer.startswith(('[', '(')):
+            try:
+                pred_cleaned = str(pred_answer).strip().replace('$', '').replace('\\', '').replace('{', '').replace('}', '').replace(' ', '')
+                ref_cleaned = str(ref_answer).strip().replace('$', '').replace('\\', '').replace('{', '').replace('}', '').replace(' ', '')
+                if pred_cleaned.replace('.', '', 1).isdigit() and ref_cleaned.replace('.', '', 1).isdigit():
+                    return 1.0 if abs(float(pred_cleaned) - float(ref_cleaned)) < settings.THETA_A else 0.0
+            except:
+                pass # Fall through to string comparison if numeric conversion fails
+
+            if str(pred_answer).startswith(('[', '(')) and str(ref_answer).startswith(('[', '(')):
                 try:
-                    return 1.0 if eval(pred_answer) == eval(ref_answer) else 0.0
+                    return 1.0 if eval(str(pred_answer)) == eval(str(ref_answer)) else 0.0
                 except:
                     return 0.0
             # Default to normalized string comparison
-            normalized_pred = pred_answer.strip().lower()
-            normalized_ref = ref_answer.strip().lower()
+            normalized_pred = str(pred_answer).strip().lower()
+            normalized_ref = str(ref_answer).strip().lower()
             return 1.0 if normalized_pred == normalized_ref else 0.0
 
     def correctness_eval(
@@ -54,12 +69,51 @@ class BasicEvaluator:
         category: str
     ) -> float:
         """Acts as a dispatcher, calling the appropriate correctness evaluation function based on the problem category."""
-        if category in ("truthfulqa", "newsqa"):
-            return self.bertscore_eval(pred_answer, ref_answer)
+        # Ensure pred_answer is always a string for consistent processing
+        pred_answer_str = str(pred_answer).strip()
+        
+        if category in ("TruthfulQA", "newsqa"):
+            # For TruthfulQA/NewsQA, ref_answer can be a list of correct answers
+            if isinstance(ref_answer, list):
+                for r in ref_answer:
+                    if self.bertscore_eval(pred_answer_str, r) == 1.0:
+                        return 1.0
+                return 0.0
+            else:
+                return self.bertscore_eval(pred_answer_str, ref_answer)
         elif category in ("hendrycks_math", "TheoremQA"):
-            return self.math_eval(pred_answer, ref_answer)
-        else: # For multiple choice questions like ai2_arc
-            return 1.0 if str(pred_answer).strip().lower() == str(ref_answer).strip().lower() else 0.0
+            # For math/theorem problems
+            if isinstance(ref_answer, list): # Handle cases where math answer might be a list (e.g., ["\\boxed{608}"])
+                for r in ref_answer:
+                    if self.math_eval(pred_answer_str, r) == 1.0:
+                        return 1.0
+                return 0.0
+            else:
+                return self.math_eval(pred_answer_str, ref_answer)
+        elif category == "ai2_arc": # For multiple choice questions like ai2_arc
+            # Extract choice letter from pred_answer if it's a sentence
+            # Example: "The answer is B." -> "B"
+            # Example: "B" -> "B"
+            # Example: "Plants cannot grow when soil is compacted." -> try to match to choices
+            
+            # Try to find a single letter choice (A, B, C, D) in the predicted answer
+            import re
+            match = re.search(r'\b[ABCD]\b', pred_answer_str.upper())
+            extracted_choice = match.group(0) if match else None
+
+            # ref_answer is expected to be a list containing a single letter like ["B"]
+            ref_choice = str(ref_answer[0]).strip().upper() if isinstance(ref_answer, list) and ref_answer else str(ref_answer).strip().upper()
+
+            if extracted_choice and extracted_choice == ref_choice:
+                return 1.0
+            
+            # Fallback: if no clear choice extracted, try BERTScore against the full answer text if available
+            # This requires question_data to have the full text of choices, which it currently doesn't pass here.
+            # For now, if direct choice match fails, return 0.0
+            return 0.0
+        else:
+            # Default for unknown categories (e.g., direct string comparison)
+            return 1.0 if pred_answer_str.lower() == str(ref_answer).strip().lower() else 0.0
 
     def evaluate(self, submission_data: dict) -> dict:
         """
@@ -70,8 +124,23 @@ class BasicEvaluator:
         submit_info = submission_data['submit']
         answer_info = submission_data['answer']
 
+        # Ensure 'pred_answer' key exists and handle potential parsing issues
+        pred_answer = submit_info.get('pred_answer', '') # Use .get() with default empty string
+        whw_description = submit_info.get('whw_description', {}) # Ensure whw_description is retrieved safely
+        
+        # If pred_answer is missing or parsing error occurred, assign 0 score
+        if not pred_answer and 'error' in submit_info:
+            print(f"Warning: Missing pred_answer in submission_data for QID {question_info.get('QID')}. Model output parsing error: {submit_info.get('error')}")
+            return {
+                "correctness_score": 0.0,
+                "complexity_score": 0.0,
+                "goal_alignment": False,
+                "count_whw": {'why': 0, 'how': 0, 'which': 0},
+                "whw_condition": False
+            }
+
         correctness = self.correctness_eval(
-            pred_answer=submit_info['pred_answer'],
+            pred_answer=pred_answer,
             ref_answer=answer_info['answer'],
             category=question_info['category']
         )
@@ -86,9 +155,10 @@ class RewardEvaluator(BasicEvaluator):
         """'How': Evaluates the complexity of the submitted code against reference standards."""
         ref_counts = get_reference_counts(question_num)
         
-        err_b = abs(submission_counts['branch_count'] - ref_counts['branch_count']) / max(ref_counts['branch_count'], 1)
-        err_l = abs(submission_counts['loop_count'] - ref_counts['loop_count']) / max(ref_counts['loop_count'], 1)
-        err_v = abs(submission_counts['variable_count'] - ref_counts['variable_count']) / max(ref_counts['variable_count'], 1)
+        # Use .get() with default 0 for submission_counts and ref_counts to prevent KeyError
+        err_b = abs(submission_counts.get('branch_count', 0) - ref_counts.get('branch_count', 0)) / max(ref_counts.get('branch_count', 1), 1)
+        err_l = abs(submission_counts.get('loop_count', 0) - ref_counts.get('loop_count', 0)) / max(ref_counts.get('loop_count', 1), 1)
+        err_v = abs(submission_counts.get('variable_count', 0) - ref_counts.get('variable_count', 0)) / max(ref_counts.get('variable_count', 1), 1)
         
         return 1.0 if max(err_b, err_l, err_v) <= settings.THETA_C else 0.0
         
@@ -103,18 +173,16 @@ class RewardEvaluator(BasicEvaluator):
         model_submission = submission_data.get('submit', {})
         
         # 2. Creating user_prompt for eval LLM
-        system_prompt = prompts.EVALUATOR_BD_PROMPT.format(model_name, question_info.get('question_num'))
+        system_prompt = prompts.EVALUATOR_BD_PROMPT.format(model_name=model_name, question_num=question_info.get('question_num'))
         user_prompt = f"""
-        ### Original Question
-        Q_Num: {question_info.get('question_num')}
-        Category: {question_info.get('category')}
-        Question: {question_info.get('question')}
-        choices: @NULLABLE
-                {question_info.get('choices')}
-        Reference Answer: {answer_info.get('answer')}
+### Original Question
+Q_Num: {question_info.get('question_num')}
+Category: {question_info.get('category')}
+Question: {question_info.get('question')}
+Reference Answer: {answer_info.get('answer')}
 
-        ### Model's Submitted Reasoning
-        {model_submission.get('pred_answer')}
+### Model's Submitted Reasoning
+{model_submission.get('pred_answer')}
         """
         
         # 3. Evla LLM invocation and result processing
@@ -128,13 +196,22 @@ class RewardEvaluator(BasicEvaluator):
             response_json = json.loads(response_text)
             return 1.0 if response_json.get('question', {}).get('rpg') else 0.0
         except:
+            print(f"Warning: Judge LLM response not parsable for QID {question_info.get('QID')}. Raw response: {response_text[:200]}...")
             return 0.0
 
     def whw_condition_eval(self, whw_description: dict) -> tuple[bool, dict]:
         """Evaluates whether the WHW (Why/How/Which) explanation rules are met."""
         # Count sentences for each item (simple example: counting by '.')
-        counts = {k: len(v.split('.')) for k, v in whw_description.items()}
-        
+        # Ensure whw_description is not None and contains expected keys
+        counts = {
+            'why': len(whw_description.get('why', '').split('.')) -1 if whw_description.get('why', '') else 0,
+            'how': len(whw_description.get('how', '').split('.')) -1 if whw_description.get('how', '') else 0,
+            'which': len(whw_description.get('which', '').split('.')) -1 if whw_description.get('which', '') else 0
+        }
+        # Adjust for empty strings resulting in 1 sentence count
+        for k, v in counts.items():
+            if v < 0: counts[k] = 0 # Ensure count is not negative if string is empty or just '.'
+
         total_sentences = sum(counts.values())
         
         # List of non-zero sentence counts for balance check
@@ -144,6 +221,8 @@ class RewardEvaluator(BasicEvaluator):
         if len(positive_counts) > 1:
             if max(positive_counts) > min(positive_counts) * settings.WHW_RULES['max_balance_ratio']:
                 is_balanced = False
+        elif len(positive_counts) == 1 and total_sentences > 0: # If only one section has sentences, it's not balanced
+            is_balanced = False
 
         condition_met = total_sentences >= settings.WHW_RULES['min_total_sentences'] and is_balanced
         return condition_met, counts
@@ -153,10 +232,24 @@ class RewardEvaluator(BasicEvaluator):
         question_info = submission_data['question_info']
         submit_info = submission_data['submit']
         answer_info = submission_data['answer']
+
+        # Ensure 'pred_answer' and 'whw_description' keys exist safely
+        pred_answer = submit_info.get('pred_answer', '')
+        whw_description = submit_info.get('whw_description', {})
         
-        # CORRECTED: Pass the correct arguments to each evaluation method
-        correctness = self().correctness_eval(
-            pred_answer=submit_info['pred_answer'],
+        # If pred_answer is missing or parsing error occurred, assign 0 score
+        if not pred_answer and 'error' in submit_info:
+            print(f"Warning: Missing pred_answer in submission_data for QID {question_info.get('QID')}. Model output parsing error: {submit_info.get('error')}")
+            return {
+                "correctness_score": 0.0,
+                "complexity_score": 0.0,
+                "goal_alignment": False,
+                "count_whw": {'why': 0, 'how': 0, 'which': 0},
+                "whw_condition": False
+            }
+
+        correctness = self.correctness_eval(
+            pred_answer=pred_answer,
             ref_answer=answer_info['answer'],
             category=question_info['category']
         )
@@ -165,7 +258,8 @@ class RewardEvaluator(BasicEvaluator):
             submission_counts=submit_info 
         )
         goal_alignment = self.reasoning_process_goal_eval(
-             submission_data=submission_data # Pass the whole object as discussed
+             model_name=submission_data.get('config', {}).get('model_name', 'unknown_model'), # Get model_name from submission_data's config
+             submission_data=submission_data
         )
         whw_met, whw_counts = self.whw_condition_eval(
             whw_description=submit_info.get('whw_description', {})

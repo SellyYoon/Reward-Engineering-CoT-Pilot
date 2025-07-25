@@ -8,7 +8,7 @@ import shutil
 from datetime import datetime, timezone
 from functools import wraps
 import torch
-from configs import settings
+from configs import settings, prompts
 
 # --- Decorator for Retry Logic ---
 
@@ -43,18 +43,49 @@ def get_utc_timestamp() -> str:
 def parse_model_json_output(response_text: str) -> dict:
     """
     Safely parses a JSON object from a model's raw text output.
-    It finds the first '{' and the last '}' to extract the JSON block.
+    It handles Markdown code blocks and extracts the pure JSON.
+    Also processes keys to remove leading/trailing spaces.
     """
+    # 1. Attempt to remove Markdown code blocks
+    json_start_tag = "```json"
+    json_end_tag = "```"
+    
+    if json_start_tag in response_text and json_end_tag in response_text:
+        start_index = response_text.find(json_start_tag) + len(json_start_tag)
+        end_index = response_text.rfind(json_end_tag)
+        if start_index != -1 and end_index != -1 and end_index > start_index:
+            json_str = response_text[start_index:end_index].strip()
+        else:
+            json_str = response_text
+    else:
+        json_str = response_text
+
+    # 2. Find and extract the first ‘{’ and last ‘}’ from a pure JSON string.
     try:
-        start_index = response_text.find('{')
-        end_index = response_text.rfind('}') + 1
-        if start_index == -1 or end_index == 0:
-            return {"error": "No JSON object found in the response."}
+        final_start_index = json_str.find('{')
+        final_end_index = json_str.rfind('}') + 1
         
-        json_str = response_text[start_index:end_index]
-        return json.loads(json_str)
+        if final_start_index == -1 or final_end_index == 0:
+            error_message = f"Model output did not contain a valid JSON object after markdown parsing. Raw response start: {response_text[:200]}..."
+            print(f"Warning: {error_message}")
+            return {"pred_answer": error_message, "error": error_message}
+        
+        pure_json_str = json_str[final_start_index:final_end_index]
+        raw_data = json.loads(pure_json_str)
+        
+        # Process keys to remove leading/trailing spaces
+        cleaned_data = {}
+        for k, v in raw_data.items():
+            cleaned_data[k.strip()] = v
+        return cleaned_data
+    except json.JSONDecodeError as e:
+        error_message = f"JSON parsing failed after extraction. Raw extracted JSON: {pure_json_str[:200]}... Error: {e}"
+        print(f"Error: {error_message}")
+        return {"pred_answer": error_message, "error": error_message}
     except Exception as e:
-        return {"error": "Failed to parse JSON from model output.", "details": str(e)}
+        error_message = f"Unexpected error parsing model output: {e}. Raw response start: {response_text[:200]}..."
+        print(f"Error: {error_message}")
+        return {"pred_answer": error_message, "error": error_message}
 
 def backup(session_id: str, model_name: str):
     """
@@ -111,3 +142,9 @@ def check_environment():
     else:
         print("Warning: No GPU found. Local model inference will be very slow.")
     print("--- Environment Check Complete ---")
+    
+def applicant_system_prompt(condition: str):
+	if condition in ("A", "C"):
+		return (prompts.SESSION_START_PROMPT + "\n\n" + prompts.CORE_TASK_PROMPT + "\n\n")
+	else:
+		return (prompts.SESSION_START_PROMPT + "\n\n" + prompts.CORE_TASK_WHW_PROMPT + "\n\n")

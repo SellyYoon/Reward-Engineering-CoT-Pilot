@@ -1,72 +1,64 @@
 # @format
 # docker-compose.yml
-version: '3.8'
+# version: '3.8'
 services:
     sbx1:
         container_name: sbx1_o4mini
-        SBX_ID: 1,
-        image: nvidia/cuda:12.9-runtime-ubuntu24.04
+        build: .
         runtime: nvidia
         env_file:
-            - ../.env
+            - ./.env
         environment:
-        MODEL_NAME: o4-mini-2025-04-16
-        CONDITION: ${CONDITION}
+            MODEL_ID: gpt-4o-mini-2024-07-18
+            SBX_ID: 1
         volumes:
-            - ../:/app
-            - ../logs:/app/logs
-            - ../backups:/app/backups
+            - '/mnt/c/Work/CoT:/app'
+            - '/mnt/e/CoT_Result/logs:/logs'
+            - '/mnt/e/CoT_Result/backups:/backups'
         working_dir: /app
-        command: bash -lc "conda activate pilot && python main.py --model ${MODEL_NAME} --condition ${CONDITION}"
-
+        command: bash -c "cd /app && conda run -n pilot python main.py --model ${MODEL_ID}"
     sbx2:
         container_name: sbx2_claude4
-        SBX_ID: 2,
-        image: nvidia/cuda:12.9-runtime-ubuntu24.04
+        build: .
         runtime: nvidia
         env_file:
-            - ../.env
+            - ./.env
         environment:
-        MODEL_NAME: claude-sonnet-4-20250514
-        CONDITION: ${CONDITION}
+            MODEL_ID: claude-sonnet-4-20250514
+            SBX_ID: 2
         volumes:
-            - ../pilot-code:/app
-            - ../logs:/app/logs
-            - ../backups:/app/backups
+            - '/mnt/c/Work/CoT:/app'
+            - '/mnt/e/CoT_Result/logs:/logs'
+            - '/mnt/e/CoT_Result/backups:/backups'
         working_dir: /app
-        command: bash -lc "conda activate pilot && python main.py --model ${MODEL_NAME} --condition ${CONDITION}"
-
+        command: bash -c "cd /app && conda run -n pilot python main.py --model ${MODEL_ID}"
     sbx3:
         container_name: sbx3_llama3
-        SBX_ID: 3,
-        image: nvidia/cuda:12.9-runtime-ubuntu24.04
+        build: .
         runtime: nvidia
         env_file:
-            - ../.env
+            - ./.env
         environment:
-        MODEL_NAME: Llama3.1-8B-Instruct
-        CONDITION: ${CONDITION}
+            MODEL_ID: meta-llama/Llama-3.1-8B-Instruct
+            SBX_ID: 3
         volumes:
-            - ../pilot-code:/app
-            - ../logs:/app/logs
-            - ../backups:/app/backups
+            - '/mnt/c/Work/CoT:/app'
+            - '/mnt/e/CoT_Result/logs:/logs'
+            - '/mnt/e/CoT_Result/backups:/backups'
         working_dir: /app
-        command: bash -lc "conda activate pilot && python main.py --model ${MODEL_NAME} --condition ${CONDITION}"
-
+        command: bash -c "cd /app && conda run -n pilot python main.py --model ${MODEL_ID}"
     sbx4:
         container_name: sbx4_mistral7b
-        SBX_ID: 4,
-        image: nvidia/cuda:12.9-runtime-ubuntu24.04
+        build: .
         runtime: nvidia
         env_file:
-            - ../.env
+            - ./.env
         environment:
-        MODEL_NAME: Mistral-7B-Instruct-v0.3
-        CONDITION: ${CONDITION}
+            MODEL_ID: mistralai/Mistral-7B-Instruct-v0.3
+            SBX_ID: 4
         volumes:
-            - ../pilot-code:/app
-            - ../logs:/app/logs
-            - ../backups:/app/backups
+            - '/mnt/c/Work/CoT:/app'
+            - '/mnt/e/CoT_Result/logs:/logs'
+            - '/mnt/e/CoT_Result/backups:/backups'
         working_dir: /app
-        command: bash -lc "conda activate pilot && python main.py --model ${MODEL_NAME} --condition ${CONDITION}"
-
+        command: bash -c "cd /app && conda run -n pilot python main.py --model ${MODEL_ID}"

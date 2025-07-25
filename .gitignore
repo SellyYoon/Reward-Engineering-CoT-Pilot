@@ -4,9 +4,11 @@ backups/
 datasets/
 results/
 *.log
+*.db
+*.zip
 
 # Ignore sensitive environment files
-
+*.env
 Tools.md
 Workflow.md
 
@@ -14,3 +16,4 @@ Workflow.md
 __pycache__/
 *.pyc
 venv/
+*.sh

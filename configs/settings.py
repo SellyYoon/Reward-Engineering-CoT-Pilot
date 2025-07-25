@@ -13,7 +13,7 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 
 # Model configuration
 APPLICANT_MODELS = [
-    {"sbx_id": 1, "name": "o4-mini",       "id": "o4-mini-2025-04-16",         "type": "api_openai"},
+    {"sbx_id": 1, "name": "o4-mini",       "id": "gpt-4o-mini-2024-07-18",         "type": "api_openai"},
     {"sbx_id": 2, "name": "claude-sonnet", "id": "claude-sonnet-4-20250514",    "type": "api_anthropic"},
     {"sbx_id": 3, "name": "llama3-8b",     "id": "meta-llama/Llama-3.1-8B-Instruct", "type": "local"},
     {"sbx_id": 4, "name": "mistral-7b",    "id": "mistralai/Mistral-7B-Instruct-v0.3",  "type": "local"},
@@ -45,11 +45,12 @@ WHW_RULES = {
 }
 
 # Paths & repository settings
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) # Project root
-LOG_DIR = Path(os.getenv("LOG_DIR", BASE_DIR / "logs"))
-BACKUP_DIR = Path(os.getenv("BACKUP_DIR", BASE_DIR / "backups"))
-DATASET_PATH = Path(os.getenv("DATASET_PATH", BASE_DIR / "datasets"))
-RESULTS_DIR =  Path(os.getenv("RESULTS_DIR", BASE_DIR / "results"))
+# BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) # Project root
+BASE_DIR = Path(__file__).resolve().parent.parent
+LOG_DIR = Path("/logs")
+BACKUP_DIR = Path("/backups")
+DATASET_PATH = Path(os.getenv("DATASET_PATH", "/datasets"))
+RESULTS_DIR =  Path(os.getenv("RESULTS_DIR", "/results"))
 # Create directories if they don't exist
 os.makedirs(LOG_DIR, exist_ok=True)
 os.makedirs(BACKUP_DIR, exist_ok=True)

@@ -27,3 +27,4 @@ Docker 28.3.2
 cmake 3.28.3, make 4.3
 multiprocessing-2.6.2.1
 dotenv-1.1.1
+bert_score-0.3.13

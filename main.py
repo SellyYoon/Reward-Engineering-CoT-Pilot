@@ -4,7 +4,6 @@
 
 import os
 import time
-import argparse
 from configs import settings
 from src import dataset_loader, trial_runner, session_manager
 from src.logger import MainLogger, TrialLogger
@@ -15,30 +14,24 @@ def main():
     # --- Step 1: Initialization ---
     # Get container-specific info from environment variables.
     sbx_id = int(os.environ.get("SBX_ID", 0))
-    model_name = os.environ.get("MODEL_NAME", "unknown_model")
-    
-    # Handle command-line arguments to allow overriding the start trial.
-    parser = argparse.ArgumentParser(description="Run the Reward Engineering Pilot experiment.")
-    parser.add_argument("--start-trial", type=int, default=None, help="Force start from a specific trial.")
-    args = parser.parse_args()
+    model_id = os.environ.get("MODEL_ID", "unknown_model_id") 
+    print(f"{sbx_id}, {model_id}") 
 
-    # Determine the trial to start from (either from saved state or command line).
-    start_from_state = session_manager.get_start_trial(sbx_id)
-    start_trial = args.start_trial if args.start_trial is not None else start_from_state
-    
-    # Log the main process start event.
-    MainLogger.log_process_start(sbx_id=sbx_id, start_trial=start_trial)
+    current_state = session_manager.load_state(sbx_id)
+    trial = current_state.get("current_trial", 0) + 1 
+
+    MainLogger.log_process_start(sbx_id=sbx_id, start_trial=trial)
     total_start_time = time.time()
     
     # Load the master dataset once for the entire run.
     master_dataset = dataset_loader.load_master_dataset()
 
     # --- Step 2: Main Experiment Loop ---
-    # The loop iterates through all trials defined in the settings.
-    for trial_num in range(start_trial, settings.TOTAL_RUNS + 1):
+    # The loop iterates through the determined range of trials.
+    for trial_num in range(trial, settings.TOTAL_RUNS + 1): 
         
         # Get all configuration for the current trial from the session manager.
-        config = session_manager.setup_trial_session(sbx_id, model_name, trial_num)
+        config = session_manager.next_session(sbx_id, model_id)
         
         # Create a dedicated logger instance for this specific trial.
         trial_logger = TrialLogger(config)
@@ -57,7 +50,7 @@ def main():
         trial_logger.log_event("TRIAL_FINISH", {"time_taken": time_taken})
 
         # Update the state file to mark this trial as successfully completed.
-        session_manager.save_trial_completion(sbx_id, trial_num)
+        session_manager.save_state(sbx_id, {"current_trial": trial_num})
         
     # --- Step 3: Finalization ---
     total_end_time = time.time()

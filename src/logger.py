@@ -48,14 +48,33 @@ class TrialLogger:
         """Generates a log file path based on the user-defined convention."""
         # Convention: {$session_id}_{$model_name}_{roll}.jsonl
         session_id = self.config['session_id']
-        model_name = self.config.get('model_name', 'unknown').replace("/", "_") # Sanitize name
-        filename = f"{session_id}_{model_name}_{roll}.jsonl"
+        model_id = self.config.get('model_id', 'unknown').replace("/", "_") # Sanitize name
+        filename = f"{session_id}_{model_id}_{roll}.jsonl"
         return os.path.join(self.log_dir, filename)
 
     def _append_to_file(self, file_path: str, data: dict):
         """Appends a single JSON line to the specified file."""
         with open(file_path, "a", encoding="utf-8") as f:
             f.write(json.dumps(data, ensure_ascii=False) + "\n")
+            
+    def log_event(self, event: str, details: dict = None):
+        """
+        Logs a general event for the current trial.
+        This method is called by main.py for TRIAL_START and TRIAL_FINISH events.
+        """
+        if details is None:
+            details = {}
+        
+        log_entry = {
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "event": event,
+            **details,
+            "session_id": self.config.get('session_id'),
+            "trial_num": self.config.get('trial_num'),
+            "model_id": self.config.get('model_id')
+        }
+        path = self._get_log_path("events") # Save general events to a separate 'events' log
+        self._append_to_file(path, log_entry)
 
     def log_submit(self, submission_data: dict):
         """Logs a raw submission from the solver model."""

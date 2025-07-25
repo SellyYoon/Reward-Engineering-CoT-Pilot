@@ -198,3 +198,16 @@ if __name__=="__main__":
 모니터링: htop, nvidia-smi 로그 파일(logs/) 모니터링백업·리셋: utils에 구현된 자동화 스크립트가 50분마다 실행
 
 추가 팁모니터링 대시보드: Grafana/Prometheus 연동에러 핸들링: try/except → 재시도 로직리소스 알림: Slack/Webhook 연동 알림자동화 예약: cron 또는 systemd 타이머결과 시각화 스크립트: Jupyter Notebook
+
+
+
+-	domenicrosati/TruthfulQA
+Type[string classes], Category[string lengths], Question[string lengths], Best Answer[string lengths], Correct Answers[string lengths], Incorrect Answers[string lengths], Source[string lengths]
+-	lucadiliello/newsqa
+context[string lengths], question[string lengths], answers[sequence], key[string lengths], labels[list]
+-	EleutherAI/hendrycks_math
+problem[string lengths], level[string classes], type[string classes], solution[string lengths]
+-   TIGER-Lab/TheoremQA
+Question[string lengths], Answer[string lengths], Answer_type[string classes], Picture[image width(px)]
+-   allenai/ai2_arc
+id[string lengths], question[string lengths], choices[sequence], answerKey[string classes]

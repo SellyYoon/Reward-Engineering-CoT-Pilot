@@ -3,9 +3,8 @@ import json
 import os
 from configs import settings
 
-# 백업/로그 폴더는 Docker-Compose에서 volume 으로 마운트된 경로를 사용
 BACKUP_DIR = settings.BACKUP_DIR
-STATE_FILE = os.path.join(BACKUP_DIR, f"{os.environ['MODEL_NAME']}_session.json")
+STATE_FILE = os.path.join(BACKUP_DIR, f"{os.environ.get('MODEL_ID', 'unknown_model_id')}_session.json")
 
 def load_state(sbx_id: int) -> dict:
     """Load the state for a specific SBX_ID from a file."""
@@ -21,7 +20,7 @@ def save_state(sbx_id: int, state: dict):
     with open(state_file, "w") as f:
         json.dump(state, f)
 
-def next_session(sbx_id: int, model_name: str) -> dict:
+def next_session(sbx_id: int, model_id: str) -> dict:
     """
     Sets up the configuration for the next trial.
     - Increments the trial number.
@@ -45,7 +44,7 @@ def next_session(sbx_id: int, model_name: str) -> dict:
         "session_id": session_id,
         "sbx_id": sbx_id,
         "trial_num": trial,
-        "model_name": model_name,
+        "model_id": model_id,
         "condition": condition,
         "seed": settings.DEFAULT_SEED
     }

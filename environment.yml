@@ -1,0 +1,31 @@
+# @format
+# environment.yml
+# Conda environment definition for the Reward Engineering Pilot experiment.
+
+name: pilot
+channels:
+    # Conda channels for core dependencies (e.g., CUDA toolkit, Python)
+    - pytorch
+    - nvidia
+    - conda-forge
+    # - defaults
+dependencies:
+    - python=3.10
+    - pip
+    # - cudatoolkit=12.4 # Keep cudatoolkit here as it's a core CUDA dependency managed by Conda
+
+    # # All other Python packages will be installed via pip
+    # - pip:
+    #       - torch==2.3.0+cu121 # Specify PyTorch with CUDA version for pip
+    #       - torchvision==0.18.0+cu121
+    #       - torchaudio==2.3.0+cu121
+    #       - transformers
+    #       - openai
+    #       - anthropic
+    #       - datasets
+    #       - pandas
+    #       - huggingface_hub
+    #       - python-dotenv
+    #       - bert-score==0.3.13
+    #       - accelerate
+    #       - bitsandbytes

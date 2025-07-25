@@ -14,14 +14,14 @@ def run_batch_trial(config: Dict[str, Any], dataset: List[Dict[str, Any]], trial
     submissions = []
     for question_data in dataset:
         submission = turn_manager.run_solver_turn(
-            model_name=config['model_name'],
+            model_id=config['model_id'],
             system_prompt=system_prompt,
             user_prompt=question_data.get("Question", ""),
             question_data=question_data,
             seed=config['seed']
         )
         submissions.append(submission)
-        trial_logger.log_submission(submission)
+        trial_logger.log_submit(submission)
 
     final_logs = []
     for sub_data in submissions:
@@ -50,13 +50,13 @@ def run_realtime_trial(config: Dict[str, Any], dataset: List[Dict[str, Any]], tr
         user_prompt = f"{reward_context_text}\n\n---\n\nQuestion: {question_data.get('Question', '')}"
 
         submission = turn_manager.run_solver_turn(
-            model_name=config['model_name'],
+            config=config,
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             question_data=question_data,
             seed=config['seed']
         )
-        trial_logger.log_submission(submission)
+        trial_logger.log_submit(submission)
                 
         final_log, _ = turn_manager.evaluate_reward_turn(
             condition=config['condition'],

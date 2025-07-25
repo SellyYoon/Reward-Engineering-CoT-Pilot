@@ -53,7 +53,6 @@ def load_local_model(model_id: str):
 def call_openai_api(model_id: str, temperature: Optional[float], system_prompt: str, user_prompt: str) -> str:
     """Calls the OpenAI API and returns the response text."""
     try:
-        temperature if temperature else settings.TEMPERATURE
         response = openai_client.chat.completions.create(
             model=model_id,
             messages=[
@@ -72,7 +71,6 @@ def call_openai_api(model_id: str, temperature: Optional[float], system_prompt: 
 def call_anthropic_api(model_id: str, temperature: Optional[float], system_prompt: str, user_prompt: str) -> str:
     """Calls the Anthropic API and returns the response text."""
     try:
-        temperature if temperature else settings.TEMPERATURE
         response = anthropic_client.messages.create(
             model=model_id,
             system=system_prompt,
@@ -89,20 +87,39 @@ def call_anthropic_api(model_id: str, temperature: Optional[float], system_promp
         print(f"Error calling Anthropic API for model {model_id}: {e}")
         return "ERROR: Anthropic API call failed."
 
-def call_local_model(model, tokenizer, system_prompt: str, user_prompt: str) -> str:
+def call_local_model(model, model_id: str, tokenizer, system_prompt: str, user_prompt: str) -> str:
     """Generates a response from a loaded local model."""
     try:
-        # Format the prompt for the local model
-        messages = [{"role": "user", "content": system_prompt + user_prompt}]
-        input_ids = tokenizer(
+        # Determine prompt format based on model_id
+        if "Mistral" in model_id or "mistralai" in model_id:
+            # Mistral Instruct format
+            messages = f"<s>[INST] {system_prompt}\n{user_prompt} [/INST]"
+        elif "Llama-3" in model_id or "meta-llama" in model_id:
+            # Llama 3 Instruct format
+            # This format includes special tokens for roles and message boundaries
+            messages = (
+                f"<|begin_of_text|>"
+                f"<|start_header_id|>system<|end_header_id|>\n\n{system_prompt}<|eot_id|>"
+                f"<|start_header_id|>user<|end_header_id|>\n\n{user_prompt}<|eot_id|>"
+                f"<|start_header_id|>assistant<|end_header_id|>"
+            )
+        else:
+            # Default to a simple concatenation if model format is unknown
+            print(f"Warning: Unknown local model format for {model_id}. Using simple concatenation.")
+            messages = f"{system_prompt}\n{user_prompt}"
+
+        inputs = tokenizer(
             messages,
-            add_generation_prompt=True,
             return_tensors="pt"
         ).to(model.device)
+
+        input_ids = inputs["input_ids"].to(model.device)
+        attention_mask = inputs["attention_mask"].to(model.device)
 
         # Generate the output
         outputs = model.generate(
             input_ids,
+            attention_mask=attention_mask,
             max_new_tokens=settings.MAX_NEW_TOKENS,
             temperature=settings.TEMPERATURE,
             top_p=settings.TOP_P,
@@ -115,12 +132,16 @@ def call_local_model(model, tokenizer, system_prompt: str, user_prompt: str) -> 
         response_text = tokenizer.decode(outputs[0][input_ids.shape[-1]:], skip_special_tokens=True)
         return response_text
     except Exception as e:
-        print(f"Error during local model inference: {e}")
+        print(f"Error during local model inference for {model_id}: {type(e).__name__}: {e}")
+        if 'input_ids' in locals() and isinstance(input_ids, torch.Tensor):
+            print(f"DEBUG: input_ids shape: {input_ids.shape}, content (first 50 tokens): {input_ids[0][:50]}")
+            print(f"DEBUG: formatted_prompt (first 200 chars): {messages[:200]}...")
         return "ERROR: Local model inference failed."
 
 def dispatch_solver_call(
     sbx_id: int, 
-    temperature: Optional[float],
+    model_id: str,
+    temperature: Optional[float],   
     system_prompt: str, 
     user_prompt: str, 
 ) -> str:
@@ -133,15 +154,13 @@ def dispatch_solver_call(
     if not model_config:
         raise ValueError(f"Solver model with sbx_id '{sbx_id}' not found in settings.")
 
-    model_id = model_config["id"]
     model_type = model_config["type"]
     
-    # Call the appropriate function depending on the model type.
-    temperature if temperature else settings.TEMPERATURE
+    # Call the appropriate function depending on the model type
     if model_type == "api_openai":
         return call_openai_api(model_id, temperature, system_prompt, user_prompt)
     elif model_type == "api_anthropic":
         return call_anthropic_api(model_id, temperature, system_prompt, user_prompt)
     elif model_type == "local":
         model, tokenizer = load_local_model(model_id)
-        return call_local_model(model, tokenizer, system_prompt, user_prompt)
+        return call_local_model(model, model_id, tokenizer, system_prompt, user_prompt)
