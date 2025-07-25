@@ -4,13 +4,17 @@
 services:
     sbx1:
         container_name: sbx1_o4mini
-        build: .
+        build:
+            context: .
+            args:
+                - HF_TOKEN=${HF_TOKEN}
         runtime: nvidia
         env_file:
             - ./.env
         environment:
             MODEL_ID: gpt-4o-mini-2024-07-18
             SBX_ID: 1
+            HF_HOME: ${HF_CACHE_PATH}/huggingface
         volumes:
             - '/mnt/c/Work/CoT:/app'
             - '/mnt/e/CoT_Result/logs:/logs'
@@ -19,13 +23,17 @@ services:
         command: bash -c "cd /app && conda run -n pilot python main.py --model ${MODEL_ID}"
     sbx2:
         container_name: sbx2_claude4
-        build: .
+        build:
+            context: .
+            args:
+                - HF_TOKEN=${HF_TOKEN}
         runtime: nvidia
         env_file:
             - ./.env
         environment:
             MODEL_ID: claude-sonnet-4-20250514
             SBX_ID: 2
+            HF_HOME: ${HF_CACHE_PATH}/huggingface
         volumes:
             - '/mnt/c/Work/CoT:/app'
             - '/mnt/e/CoT_Result/logs:/logs'
@@ -34,13 +42,17 @@ services:
         command: bash -c "cd /app && conda run -n pilot python main.py --model ${MODEL_ID}"
     sbx3:
         container_name: sbx3_llama3
-        build: .
+        build:
+            context: .
+            args:
+                - HF_TOKEN=${HF_TOKEN}
         runtime: nvidia
         env_file:
             - ./.env
         environment:
             MODEL_ID: meta-llama/Llama-3.1-8B-Instruct
             SBX_ID: 3
+            HF_HOME: ${HF_CACHE_PATH}/huggingface
         volumes:
             - '/mnt/c/Work/CoT:/app'
             - '/mnt/e/CoT_Result/logs:/logs'
@@ -49,13 +61,17 @@ services:
         command: bash -c "cd /app && conda run -n pilot python main.py --model ${MODEL_ID}"
     sbx4:
         container_name: sbx4_mistral7b
-        build: .
+        build:
+            context: .
+            args:
+                - HF_TOKEN=${HF_TOKEN}
         runtime: nvidia
         env_file:
             - ./.env
         environment:
             MODEL_ID: mistralai/Mistral-7B-Instruct-v0.3
             SBX_ID: 4
+            HF_HOME: ${HF_CACHE_PATH}/huggingface
         volumes:
             - '/mnt/c/Work/CoT:/app'
             - '/mnt/e/CoT_Result/logs:/logs'

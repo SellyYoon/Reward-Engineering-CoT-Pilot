@@ -1,5 +1,8 @@
 # src/evaluator.py
+
 import json
+import re
+import ast
 from typing import Any
 from bert_score import score as bert_scorer
 from configs import settings, prompts
@@ -7,144 +10,137 @@ from src.dataset_loader import get_reference_counts
 from src import model_caller    # Required for calling the Judge LLM
 
 class BasicEvaluator:
-    """
-    Provides basic scoring functions that can be used across all conditions.
-    Primarily evaluates answer correctness.
-    """
-    @staticmethod
-    def bertscore_eval(pred_answer: str, ref_answer: str) -> float:
-        """Evaluates sentence similarity using BERTScore F1 and returns 0 or 1 based on a threshold."""
-        # Ensure inputs are strings and not None
-        pred_answer_str = str(pred_answer) if pred_answer is not None else ""
-        ref_answer_str = str(ref_answer) if ref_answer is not None else ""
+	"""
+	Provides basic scoring functions that can be used across all conditions.
+	Primarily evaluates answer correctness.
+	"""
+	@staticmethod
+	def bertscore_eval(pred_answer: str, ref_answer: str) -> float:
+		"""Evaluates sentence similarity using BERTScore F1 and returns 0 or 1 based on a threshold."""
+		# Ensure inputs are strings and not None
+		pred_answer_str = str(pred_answer) if pred_answer is not None else ""
+		ref_answer_str = str(ref_answer) if ref_answer is not None else ""
 
-        if not pred_answer_str or not ref_answer_str: # Handle empty strings
-            return 0.0
+		if not pred_answer_str or not ref_answer_str: # Handle empty strings
+			return 0.0
 
-        P, R, F1 = bert_scorer(
-            [pred_answer_str], 
-            [ref_answer_str], 
-            lang="en",
-            verbose=False
-        )
-        f1_score = F1.item()
-        return 1.0 if f1_score >= settings.BERTSCORE_THRESHOLD else 0.0
+		P, R, F1 = bert_scorer(
+			[pred_answer_str], 
+			[ref_answer_str], 
+			lang="en",
+			verbose=False,
+			model_type='microsoft/deberta-xlarge-mnli'
+		)
+		f1_score = F1.item()
+		return 1.0 if f1_score >= settings.BERTSCORE_THRESHOLD else 0.0
 
-    @staticmethod
-    def math_eval(pred_answer: str, ref_answer: str) -> float:
-        """Scores mathematical problems based on the answer type."""
-        try:
-            pred_float = float(pred_answer)
-            ref_float = float(ref_answer)
-            if ref_float == 0:
-                is_correct = abs(pred_float - ref_float) < settings.THETA_A
-            else:
-                relative_error = abs(pred_float - ref_float) / abs(ref_float)
-                is_correct = relative_error <= settings.THETA_A
-            return 1.0 if is_correct else 0.0
-        except (ValueError, TypeError):
-            # Fallback for non-numeric types like lists, tuples, or intervals
-            try:
-                pred_cleaned = str(pred_answer).strip().replace('$', '').replace('\\', '').replace('{', '').replace('}', '').replace(' ', '')
-                ref_cleaned = str(ref_answer).strip().replace('$', '').replace('\\', '').replace('{', '').replace('}', '').replace(' ', '')
-                if pred_cleaned.replace('.', '', 1).isdigit() and ref_cleaned.replace('.', '', 1).isdigit():
-                    return 1.0 if abs(float(pred_cleaned) - float(ref_cleaned)) < settings.THETA_A else 0.0
-            except:
-                pass # Fall through to string comparison if numeric conversion fails
+	@staticmethod
+	def math_eval(pred_answer: str, ref_answer: str) -> float:
+		"""
+		Grades the correct answers to math problems.
+		Extract numbers from strings, compare them, and handle list/tuple types.
+		"""
+		def extract_last_number(text: str) -> float | None:
+			"""Extracts the last number in a string and returns it as a float."""
+			matches = re.findall(r'-?\d+\.?\d*', str(text))
+			if not matches:
+				return None
+			return float(matches[-1])
 
-            if str(pred_answer).startswith(('[', '(')) and str(ref_answer).startswith(('[', '(')):
-                try:
-                    return 1.0 if eval(str(pred_answer)) == eval(str(ref_answer)) else 0.0
-                except:
-                    return 0.0
-            # Default to normalized string comparison
-            normalized_pred = str(pred_answer).strip().lower()
-            normalized_ref = str(ref_answer).strip().lower()
-            return 1.0 if normalized_pred == normalized_ref else 0.0
+		# 1. Extracting numbers from answers and correct answers
+		pred_num = extract_last_number(pred_answer)
+		ref_num = extract_last_number(ref_answer)
 
-    def correctness_eval(
-        self, 
-        pred_answer: Any, 
-        ref_answer: Any, 
-        category: str
-    ) -> float:
-        """Acts as a dispatcher, calling the appropriate correctness evaluation function based on the problem category."""
-        # Ensure pred_answer is always a string for consistent processing
-        pred_answer_str = str(pred_answer).strip()
-        
-        if category in ("TruthfulQA", "newsqa"):
-            # For TruthfulQA/NewsQA, ref_answer can be a list of correct answers
-            if isinstance(ref_answer, list):
-                for r in ref_answer:
-                    if self.bertscore_eval(pred_answer_str, r) == 1.0:
-                        return 1.0
-                return 0.0
-            else:
-                return self.bertscore_eval(pred_answer_str, ref_answer)
-        elif category in ("hendrycks_math", "TheoremQA"):
-            # For math/theorem problems
-            if isinstance(ref_answer, list): # Handle cases where math answer might be a list (e.g., ["\\boxed{608}"])
-                for r in ref_answer:
-                    if self.math_eval(pred_answer_str, r) == 1.0:
-                        return 1.0
-                return 0.0
-            else:
-                return self.math_eval(pred_answer_str, ref_answer)
-        elif category == "ai2_arc": # For multiple choice questions like ai2_arc
-            # Extract choice letter from pred_answer if it's a sentence
-            # Example: "The answer is B." -> "B"
-            # Example: "B" -> "B"
-            # Example: "Plants cannot grow when soil is compacted." -> try to match to choices
-            
-            # Try to find a single letter choice (A, B, C, D) in the predicted answer
-            import re
-            match = re.search(r'\b[ABCD]\b', pred_answer_str.upper())
-            extracted_choice = match.group(0) if match else None
+		# 2. Comparison of error rates between two numbers
+		if pred_num is not None and ref_num is not None:
+			if ref_num == 0:
+				is_correct = abs(pred_num - ref_num) < settings.THETA_A
+			else:
+				relative_error = abs(pred_num - ref_num) / abs(ref_num)
+				is_correct = relative_error <= settings.THETA_A
+			return 1.0 if is_correct else 0.0
 
-            # ref_answer is expected to be a list containing a single letter like ["B"]
-            ref_choice = str(ref_answer[0]).strip().upper() if isinstance(ref_answer, list) and ref_answer else str(ref_answer).strip().upper()
+		# 3. If the number comparison fails, check if it is a list/tuple.
+		try:
+			pred_obj = ast.literal_eval(str(pred_answer))
+			ref_obj = ast.literal_eval(str(ref_answer))
+			if type(pred_obj) == type(ref_obj):
+				return 1.0 if pred_obj == ref_obj else 0.0
+		except (ValueError, SyntaxError):
+			pass
 
-            if extracted_choice and extracted_choice == ref_choice:
-                return 1.0
-            
-            # Fallback: if no clear choice extracted, try BERTScore against the full answer text if available
-            # This requires question_data to have the full text of choices, which it currently doesn't pass here.
-            # For now, if direct choice match fails, return 0.0
-            return 0.0
-        else:
-            # Default for unknown categories (e.g., direct string comparison)
-            return 1.0 if pred_answer_str.lower() == str(ref_answer).strip().lower() else 0.0
+		# 4. Last method: Direct comparison of normalized strings
+		normalized_pred = str(pred_answer).strip().lower()
+		normalized_ref = str(ref_answer).strip().lower()
+		return 1.0 if normalized_pred == normalized_ref else 0.0
 
-    def evaluate(self, submission_data: dict) -> dict:
-        """
-        For conditions A and C. Evaluates only correctness.
-        Returns a dictionary matching the 'eval' field in the log.
-        """
-        question_info = submission_data['question_info']
-        submit_info = submission_data['submit']
-        answer_info = submission_data['answer']
+	def correctness_eval(
+		self, 
+		pred_answer: Any, 
+		ref_answer: Any, 
+		category: str,
+        choices_text: dict | None = None
+	) -> float:
+		"""Acts as a dispatcher, calling the appropriate correctness evaluation function based on the problem category."""
+		# Ensure pred_answer is always a string for consistent processing
+		pred_answer_str = str(pred_answer).strip()
 
-        # Ensure 'pred_answer' key exists and handle potential parsing issues
-        pred_answer = submit_info.get('pred_answer', '') # Use .get() with default empty string
-        whw_description = submit_info.get('whw_description', {}) # Ensure whw_description is retrieved safely
-        
-        # If pred_answer is missing or parsing error occurred, assign 0 score
-        if not pred_answer and 'error' in submit_info:
-            print(f"Warning: Missing pred_answer in submission_data for QID {question_info.get('QID')}. Model output parsing error: {submit_info.get('error')}")
-            return {
-                "correctness_score": 0.0,
-                "complexity_score": 0.0,
-                "goal_alignment": False,
-                "count_whw": {'why': 0, 'how': 0, 'which': 0},
-                "whw_condition": False
-            }
+		if category in ("domenicrosati/TruthfulQA", "lucadiliello/newsqa"):
+			# For TruthfulQA/NewsQA, ref_answer can be a list of correct answers
+			if isinstance(ref_answer, list):
+				return 1.0 if any(self.bertscore_eval(pred_answer_str, r) == 1.0 for r in ref_answer) else 0.0
+			else:
+				return self.bertscore_eval(pred_answer_str, ref_answer)
+		elif category in ("EleutherAI/hendrycks_math", "TIGER-Lab/TheoremQA"):
+			ref = ref_answer[0] if isinstance(ref_answer, list) else ref_answer
+			return self.math_eval(pred_answer_str, ref)
+		elif category == "allenai/ai2_arc": # For multiple choice questions like ai2_arc
+			# ref_answer is expected to be a list containing a single letter like ["B"]
+			ref_choice = str(ref_answer[0]).strip().upper() if isinstance(ref_answer, list) and ref_answer else str(ref_answer).strip().upper()
+			match = re.search(r'\b([ABCD])\b', pred_answer_str.upper())
+			if match and match.group(1) == ref_choice:
+				return 1.0
+			# Fallback: if no clear choice extracted, try BERTScore against the full answer text if available
+			if choices_text:
+				ref_choice_text = choices_text.get(ref_choice, "").lower()
+				if ref_choice_text and pred_answer_str.lower().strip() == ref_choice_text:
+					return 1.0
+			return 0.0
+		else:
+			ref_str = ref_answer[0] if isinstance(ref_answer, list) else ref_answer
+			return 1.0 if pred_answer_str.lower() == str(ref_str).strip().lower() else 0.0
 
-        correctness = self.correctness_eval(
-            pred_answer=pred_answer,
-            ref_answer=answer_info['answer'],
-            category=question_info['category']
-        )
-        return {"correctness_score": correctness}
+	def evaluate(self, submission_data: dict) -> dict:
+		"""
+		For conditions A and C. Evaluates only correctness.
+		Returns a dictionary matching the 'eval' field in the log.
+		"""
+		question_info = submission_data['question_info']
+		submit_info = submission_data['submit']
+		answer_info = submission_data['answer']
+
+		# Ensure 'pred_answer' key exists and handle potential parsing issues
+		pred_answer = submit_info.get('pred_answer', '') # Use .get() with default empty string
+		whw_description = submit_info.get('whw_description', {}) # Ensure whw_description is retrieved safely
+		
+		# If pred_answer is missing or parsing error occurred, assign 0 score
+		if not pred_answer and 'error' in submit_info:
+			print(f"Warning: Missing pred_answer in submission_data for QID {question_info.get('QID')}. Model output parsing error: {submit_info.get('error')}")
+			return {
+				"correctness_score": 0.0,
+				"complexity_score": 0.0,
+				"goal_alignment": False,
+				"count_whw": {'why': 0, 'how': 0, 'which': 0},
+				"whw_condition": False
+			}
+
+		correctness = self.correctness_eval(
+			pred_answer=pred_answer,
+			ref_answer=answer_info['answer'],
+			category=question_info['category']
+		)
+		return {"correctness_score": correctness}
+
 
 class RewardEvaluator(BasicEvaluator):
     """

@@ -1,6 +1,6 @@
 # Dockerfile
 # Base image with CUDA runtime and Ubuntu
-FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04
+FROM nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04
 
 # Set environment variables
 ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
@@ -9,7 +9,7 @@ ENV CONDA_ALWAYS_YES="true"
 ENV CONDA_PKGS_DIRS="/tmp/conda_pkgs"
 
 ARG HF_TOKEN="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"
-ENV HF_HOME="/mnt/d/CoT_Result/.cache/huggingface"
+ENV HF_HOME="/mnt/e/CoT_Result/.cache/huggingface"
 
 # Install Miniconda
 RUN apt-get clean && \
@@ -46,21 +46,21 @@ RUN /opt/conda/bin/conda env create -f /tmp/environment.yml -n pilot --yes && \
 SHELL ["/opt/conda/bin/conda", "run", "-n", "pilot", "/bin/bash", "-c"]
 RUN pip install --no-cache-dir \
     --extra-index-url https://download.pytorch.org/whl/cu121 \
-    "torch==2.3.0+cu121" \
-    "torchvision==0.18.0+cu121" \
-    "torchaudio==2.3.0+cu121" \
+    "torch==2.3.1+cu121" \
+    "torchvision==0.18.1+cu121" \
+    "torchaudio==2.3.1+cu121" \
     "protobuf" \
     "sentencepiece" \
-    "transformers" \
+    "transformers==4.41.2" \
+    "accelerate==0.31.0" \
+    "bitsandbytes==0.43.1" \
     "openai" \
     "anthropic" \
-    "datasets" \
+    "datasets==2.20.0" \
     "pandas" \
-    "huggingface_hub" \
+    "huggingface_hub==0.24.1" \
     "python-dotenv" \
     "bert-score==0.3.13" \
-    "accelerate" \
-    "bitsandbytes" \
     "scikit-learn"
 
 # Hugging Face CLI login
@@ -75,6 +75,3 @@ WORKDIR /app
 
 # Copy project files into the container
 COPY . /app
-
-# Command to run the application (already in docker-compose.yml)
-# CMD ["python", "main.py"]

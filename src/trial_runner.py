@@ -1,7 +1,7 @@
 # src/trial_runner.py
 # Orchestrates the execution of a full experimental trial.
 
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from configs import settings
 from src import turn_manager, utils
 from src.logger import TrialLogger # Import the class for type hinting
@@ -13,10 +13,14 @@ def run_batch_trial(config: Dict[str, Any], dataset: List[Dict[str, Any]], trial
     system_prompt = utils.applicant_system_prompt(config['condition'])
     submissions = []
     for question_data in dataset:
+        category = question_data.get("category")
+        if category == "allenai/ai2_arc":
+            instruction = "\n\nProvide the answer to this question with the option letter (e.g., A, B, C, D)."
+
         submission = turn_manager.run_solver_turn(
             model_id=config['model_id'],
             system_prompt=system_prompt,
-            user_prompt=question_data.get("Question", ""),
+            user_prompt=question_data.get("Question", "") + instruction,
             question_data=question_data,
             seed=config['seed']
         )
@@ -32,10 +36,10 @@ def run_batch_trial(config: Dict[str, Any], dataset: List[Dict[str, Any]], trial
     total_score = _calculate_final_score(final_logs, config['condition'])
     print(f"Batch trial complete. Total Score: {total_score}")
     
-    utils.backup(config)
+    utils.backup(config['session_id'], config['model_id'])
     utils.clear_caches()
 
-def run_realtime_trial(config: Dict[str, Any], dataset: List[Dict[str, Any]], trial_logger: TrialLogger):
+def run_realtime_trial(config: Dict[str, Any], dataset: List[Dict[str, Any]], trial_logger: TrialLogger, local_models: Optional[dict] = None):
     """Executes a full trial for real-time scoring conditions (A, B)."""
     print(f"--- Running Real-time Trial: {config['session_id']} | Condition: {config['condition']} ---")
     
@@ -54,7 +58,8 @@ def run_realtime_trial(config: Dict[str, Any], dataset: List[Dict[str, Any]], tr
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             question_data=question_data,
-            seed=config['seed']
+            seed=config['seed'],
+            local_models=local_models
         )
         trial_logger.log_submit(submission)
                 
@@ -68,7 +73,7 @@ def run_realtime_trial(config: Dict[str, Any], dataset: List[Dict[str, Any]], tr
         # Update the sliding window with the full log for rich context
         reward_window = _update_reward_window(reward_window, final_log)
     
-    utils.backup(config)
+    utils.backup(config['session_id'], config['model_id'])
     utils.clear_caches()
 
 # --- Helper Functions for this module ---

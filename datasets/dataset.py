@@ -50,10 +50,10 @@ def build_master_set() -> Dataset:
         if category == "lucadiliello/newsqa":
             q = ex.get("context") + "\n\n" + ex.get("question")
         elif category == "allenai/ai2_arc":
-            q = (
-                f"{ex.get('question','')}\n\n"
-                f"choices: \n{ex.get('choices','')}"
-            )
+            choices_obj = ex.get('choices', {'text': [], 'label': []})
+            choices_text_parts = [f"{label}. {text}" for label, text in zip(choices_obj.get('label', []), choices_obj.get('text', []))]
+            choices_text = "\n".join(choices_text_parts)
+            q = f"{ex.get('question', '')}\n\nChoices:\n{choices_text}"
         else:
             q = ex.get("Question") or ex.get("question") or ex.get("problem") or ""
         if category == "domenicrosati/TruthfulQA":
@@ -134,7 +134,10 @@ def standardize_and_flatten(ds: Dataset) -> Dataset:
             raw_q = f"{ex.get('context','')}\n\n{ex.get('question','')}"
         elif category == "allenai/ai2_arc":
             # ARC: question + choices
-            raw_q = f"{ex.get('question','')}\n\n"f"choices:\n{ex.get('choices','')}"
+            choices_obj = ex.get('Choices', {'text': [], 'label': []})
+            choices_text_parts = [f"{label}. {text}" for label, text in zip(choices_obj.get('label', []), choices_obj.get('text', []))]
+            choices_text = "\n".join(choices_text_parts)
+            raw_q = f"{ex.get('Question', '')}\n\nChoices:\n{choices_text}"
         else:
             raw_q = ex.get("Question") or ex.get("question") or ex.get("problem") or ""
         question = str(raw_q)

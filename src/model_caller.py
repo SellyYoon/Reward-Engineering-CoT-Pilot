@@ -1,6 +1,7 @@
 # src/model_caller.py
 # Handles inference calls to both API-based and local LLMs.
 
+import traceback
 from typing import Optional
 import torch
 from openai import OpenAI
@@ -11,9 +12,7 @@ from functools import lru_cache
 
 # --- Client Initialization ---
 
-# Initialize API clients. The libraries will automatically find the API keys
-# from the environment variables (which should be loaded by an entrypoint script
-# like main.py or settings.py using `load_dotenv`).
+# Initialize API clients. The libraries will automatically find the API keys from the environment variables
 openai_client = OpenAI()
 anthropic_client = Anthropic()
 
@@ -136,7 +135,12 @@ def call_local_model(model, model_id: str, tokenizer, system_prompt: str, user_p
         if 'input_ids' in locals() and isinstance(input_ids, torch.Tensor):
             print(f"DEBUG: input_ids shape: {input_ids.shape}, content (first 50 tokens): {input_ids[0][:50]}")
             print(f"DEBUG: formatted_prompt (first 200 chars): {messages[:200]}...")
-        return "ERROR: Local model inference failed."
+            print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+            print("!!!      DETAILED INFERENCE ERROR         !!!")
+            print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+            traceback.print_exc()
+            print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+            return "ERROR: Local model inference failed."
 
 def dispatch_solver_call(
     sbx_id: int, 
@@ -144,6 +148,7 @@ def dispatch_solver_call(
     temperature: Optional[float],   
     system_prompt: str, 
     user_prompt: str, 
+    local_models: Optional[dict] = None
 ) -> str:
     """
     Finds the solver model config for the given sbx_id and calls it.
@@ -162,5 +167,10 @@ def dispatch_solver_call(
     elif model_type == "api_anthropic":
         return call_anthropic_api(model_id, temperature, system_prompt, user_prompt)
     elif model_type == "local":
-        model, tokenizer = load_local_model(model_id)
+        if not local_models or model_id not in local_models:
+            raise ValueError(f"Local model {model_id} was not pre-loaded.")
+            
+        loaded_model_obj = local_models[model_id]
+        model = loaded_model_obj["model"]
+        tokenizer = loaded_model_obj["tokenizer"]
         return call_local_model(model, model_id, tokenizer, system_prompt, user_prompt)

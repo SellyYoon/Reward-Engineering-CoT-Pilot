@@ -4,7 +4,17 @@
 
 import os
 import time
+
+print("--- INSPECTING src/model_caller.py FROM INSIDE THE CONTAINER ---")
+try:
+    with open("/app/src/model_caller.py", "r", encoding="utf-8") as f:
+        print(f.read())
+except Exception as e:
+    print(f"Could not read the file: {e}")
+print("------------------- INSPECTION END -------------------")
+
 from configs import settings
+from src import model_caller
 from src import dataset_loader, trial_runner, session_manager
 from src.logger import MainLogger, TrialLogger
 
@@ -26,6 +36,27 @@ def main():
     # Load the master dataset once for the entire run.
     master_dataset = dataset_loader.load_master_dataset()
 
+    print("Pre-loading local model for this container...")
+    local_models = {}
+    for model_config in settings.APPLICANT_MODELS:
+        if model_config.get("model_id") == model_id:
+            model_id_to_load = model_config["model_id"]
+            
+            print(f"INFO: Found matching model to load: {model_id_to_load}")
+            model, tokenizer = model_caller.load_local_model(model_id_to_load)
+            
+            if model and tokenizer:
+                local_models[model_id_to_load] = {"model": model, "tokenizer": tokenizer}
+                print(f"INFO: {model_id_to_load} loaded successfully.")
+            else:
+                print(f"ERROR: {model_id_to_load} failed to load.")
+            break
+
+    if not local_models and any(m.get("model_id") == model_id and m.get("type") == "local" for m in settings.APPLICANT_MODELS):
+        print(f"WARNING: A local model config was found for '{model_id}' in settings.py, but it failed to load.")
+
+    print("Pre-loading finished.")
+
     # --- Step 2: Main Experiment Loop ---
     # The loop iterates through the determined range of trials.
     for trial_num in range(trial, settings.TOTAL_RUNS + 1): 
@@ -40,9 +71,9 @@ def main():
 
         # Branch the workflow based on the condition.
         if config['condition'] in ['A', 'B']:
-            trial_runner.run_realtime_trial(config, master_dataset, trial_logger)
+            trial_runner.run_realtime_trial(config, master_dataset, trial_logger, local_models)
         else: # Conditions C, D
-            trial_runner.run_batch_trial(config, master_dataset, trial_logger)
+            trial_runner.run_batch_trial(config, master_dataset, trial_logger, local_models)
         
         # Log the completion and duration of the trial.
         trial_end_time = time.time()

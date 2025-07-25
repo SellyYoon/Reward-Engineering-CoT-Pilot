@@ -87,7 +87,7 @@ def parse_model_json_output(response_text: str) -> dict:
         print(f"Error: {error_message}")
         return {"pred_answer": error_message, "error": error_message}
 
-def backup(session_id: str, model_name: str):
+def backup(session_id: str, model_id: str):
     """
     Finds all logs for a given session and moves them to a backup directory.
     """
@@ -96,7 +96,7 @@ def backup(session_id: str, model_name: str):
     os.makedirs(backup_dir, exist_ok=True)
     
     # Sanitize model name for matching
-    safe_model_name = model_name.replace("/", "_")
+    safe_model_name = model_id.replace("/", "_")
     
     prefix = f"{session_id}_{safe_model_name}"
     
@@ -119,10 +119,8 @@ def clear_caches():
         print(f"Could not clear GPU cache: {e}")
 
     # 2. LRU Cache Clearing (Informational)
-    # LRU caches are bound to functions. They must be cleared where the functions are accessible.
-    # Example (in main.py or trial_runner.py):
-    #   from src import model_caller
-    #   model_caller.load_local_model.cache_clear()
+    from src import model_caller
+    model_caller.load_local_model.cache_clear()
     print("LRU caches should be cleared directly on the decorated functions in the main script.")
 
 def check_environment():

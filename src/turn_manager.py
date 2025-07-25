@@ -1,7 +1,7 @@
 # src/turn_manager.py
 # Manages the logic for a single problem-solving turn.
 
-from typing import Dict, Any, Tuple
+from typing import Dict, Any, Optional, Tuple
 from configs import settings
 from src import model_caller, evaluator, reward_system, utils
 
@@ -18,7 +18,8 @@ def run_solver_turn(
     system_prompt: str, 
     user_prompt: str,
     question_data: dict,
-    seed: int
+    seed: int,
+    local_models: Optional[dict] = None
 ) -> dict:
     """
     Executes a single turn for the solver model.
@@ -32,7 +33,8 @@ def run_solver_turn(
         model_id=config['model_id'],
         temperature=settings.TEMPERATURE,
         system_prompt=system_prompt,
-        user_prompt=user_prompt
+        user_prompt=user_prompt,
+        local_models=local_models
     )
 
     print(f"DEBUG: Raw model response for QID {question_data.get('QID')}:")

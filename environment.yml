@@ -4,9 +4,8 @@
 
 name: pilot
 channels:
-    # Conda channels for core dependencies (e.g., CUDA toolkit, Python)
-    - pytorch
-    - nvidia
+    # - pytorch
+    # - nvidia
     - conda-forge
     # - defaults
 dependencies:
