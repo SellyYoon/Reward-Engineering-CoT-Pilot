@@ -134,7 +134,7 @@ def call_local_model(model, model_id: str, tokenizer, system_prompt: str, user_p
         print(f"Error during local model inference for {model_id}: {type(e).__name__}: {e}")
         if 'input_ids' in locals() and isinstance(input_ids, torch.Tensor):
             print(f"DEBUG: input_ids shape: {input_ids.shape}, content (first 50 tokens): {input_ids[0][:50]}")
-            print(f"DEBUG: formatted_prompt (first 200 chars): {messages[:200]}...")
+            print(f"DEBUG: formatted_prompt: {messages[:200]}...")
             print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
             print("!!!      DETAILED INFERENCE ERROR         !!!")
             print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")

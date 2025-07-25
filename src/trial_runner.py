@@ -13,7 +13,7 @@ def run_batch_trial(config: Dict[str, Any], dataset: List[Dict[str, Any]], trial
     system_prompt = utils.applicant_system_prompt(config['condition'])
     submissions = []
     for question_data in dataset:
-        category = question_data.get("category")
+        category = question_data.get("Category")
         if category == "allenai/ai2_arc":
             instruction = "\n\nProvide the answer to this question with the option letter (e.g., A, B, C, D)."
 

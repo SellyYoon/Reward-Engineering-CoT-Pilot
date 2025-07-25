@@ -137,7 +137,7 @@ class BasicEvaluator:
 		correctness = self.correctness_eval(
 			pred_answer=pred_answer,
 			ref_answer=answer_info['answer'],
-			category=question_info['category']
+			category=question_info['Category']
 		)
 		return {"correctness_score": correctness}
 
@@ -173,7 +173,7 @@ class RewardEvaluator(BasicEvaluator):
         user_prompt = f"""
 ### Original Question
 Q_Num: {question_info.get('question_num')}
-Category: {question_info.get('category')}
+Category: {question_info.get('Category')}
 Question: {question_info.get('question')}
 Reference Answer: {answer_info.get('answer')}
 
@@ -247,7 +247,7 @@ Reference Answer: {answer_info.get('answer')}
         correctness = self.correctness_eval(
             pred_answer=pred_answer,
             ref_answer=answer_info['answer'],
-            category=question_info['category']
+            category=question_info['Category']
         )
         complexity = self.complexity_eval(
             question_num=question_info['question_num'],

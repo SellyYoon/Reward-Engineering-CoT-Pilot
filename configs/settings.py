@@ -49,11 +49,11 @@ WHW_RULES = {
 BASE_DIR = Path(__file__).resolve().parent.parent
 LOG_DIR = Path("/logs")
 BACKUP_DIR = Path("/backups")
-DATASET_PATH = Path(os.getenv("DATASET_PATH", "/datasets"))
-RESULTS_DIR =  Path(os.getenv("RESULTS_DIR", "/results"))
+DATASET_PATH = Path(os.getenv("DATASET_PATH", BASE_DIR / "datasets"))
+RESULTS_DIR =  Path(os.getenv("RESULTS_DIR", BASE_DIR / "results"))
 # Create directories if they don't exist
-os.makedirs(LOG_DIR, exist_ok=True)
-os.makedirs(BACKUP_DIR, exist_ok=True)
+# os.makedirs(LOG_DIR, exist_ok=True)
+# os.makedirs(BACKUP_DIR, exist_ok=True)
 os.makedirs(DATASET_PATH, exist_ok=True)
 os.makedirs(RESULTS_DIR, exist_ok=True)
 

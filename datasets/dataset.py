@@ -21,19 +21,19 @@ client = OpenAI(api_key=settings.OPENAI_API_KEY)
 def get_base_datasets(seed: int = 42) -> dict:
     """Loads and samples the base datasets from Hugging Face."""
     ds = {}
-    ds["truthful"] = load_dataset("domenicrosati/TruthfulQA", split="train").shuffle(seed).select(range(60)).map(lambda ex: {"category": "domenicrosati/TruthfulQA"})
-    ds["newsqa"]   = load_dataset("lucadiliello/newsqa", split="train").shuffle(seed).select(range(40)).map(lambda ex: {"category": "lucadiliello/newsqa"})
+    ds["truthful"] = load_dataset("domenicrosati/TruthfulQA", split="train").shuffle(seed).select(range(60)).map(lambda ex: {"Category": "domenicrosati/TruthfulQA"})
+    ds["newsqa"]   = load_dataset("lucadiliello/newsqa", split="train").shuffle(seed).select(range(40)).map(lambda ex: {"Category": "lucadiliello/newsqa"})
     
-    ds["arc"]      = load_dataset("ai2_arc", "ARC-Challenge", split="train").shuffle(seed).select(range(30)).map(lambda ex: {"category": "allenai/ai2_arc"})
+    ds["arc"]      = load_dataset("ai2_arc", "ARC-Challenge", split="train").shuffle(seed).select(range(30)).map(lambda ex: {"Category": "allenai/ai2_arc"})
     
     theorem = load_dataset("TIGER-Lab/TheoremQA", split="test").filter(lambda ex: ex.get("Picture") is None or ex.get("Picture") == "")
-    ds["theorem"]  = theorem.shuffle(seed).select(range(30)).map(lambda ex: {"category": "TIGER-Lab/TheoremQA"})
+    ds["theorem"]  = theorem.shuffle(seed).select(range(30)).map(lambda ex: {"Category": "TIGER-Lab/TheoremQA"})
     
     math_algebra = load_dataset("EleutherAI/hendrycks_math", "algebra", split="train")
     math_intermediate_algebra = load_dataset("EleutherAI/hendrycks_math", "intermediate_algebra", split="train")
     math_precalculus = load_dataset("EleutherAI/hendrycks_math", "precalculus", split="train")
     combined_math = concatenate_datasets([math_algebra, math_intermediate_algebra, math_precalculus])
-    ds["math"] = combined_math.shuffle(seed).select(range(40)).map(lambda ex: {"category": "EleutherAI/hendrycks_math"})
+    ds["math"] = combined_math.shuffle(seed).select(range(40)).map(lambda ex: {"Category": "EleutherAI/hendrycks_math"})
 
     return ds
 
@@ -46,7 +46,7 @@ def build_master_set() -> Dataset:
 
     # Tag instruction complexity via LLM API
     def tag_complexity(ex, idx):
-        category = ex.get("category")
+        category = ex.get("Category")
         if category == "lucadiliello/newsqa":
             q = ex.get("context") + "\n\n" + ex.get("question")
         elif category == "allenai/ai2_arc":
@@ -127,7 +127,7 @@ def standardize_and_flatten(ds: Dataset) -> Dataset:
     def _flatten(ex, idx):
         
         qid = idx + 1
-        category = ex.get("category")
+        category = ex.get("Category")
 
         if category == "lucadiliello/newsqa":
             # NewsQA: context + question
@@ -137,7 +137,7 @@ def standardize_and_flatten(ds: Dataset) -> Dataset:
             choices_obj = ex.get('Choices', {'text': [], 'label': []})
             choices_text_parts = [f"{label}. {text}" for label, text in zip(choices_obj.get('label', []), choices_obj.get('text', []))]
             choices_text = "\n".join(choices_text_parts)
-            raw_q = f"{ex.get('Question', '')}\n\nChoices:\n{choices_text}"
+            raw_q = f"{ex.get('question', '')}\n\nChoices:\n{choices_text}"
         else:
             raw_q = ex.get("Question") or ex.get("question") or ex.get("problem") or ""
         question = str(raw_q)
@@ -178,7 +178,7 @@ def standardize_and_flatten(ds: Dataset) -> Dataset:
         
         return {
             "QID": qid,
-            "category": category,
+            "Category": category,
             "Question": question,
             "Answer": ans_list,
             "pseudocode": ic.get("pseudocode", ""),
@@ -213,12 +213,12 @@ def save_sqlite(ds: Dataset, db_path: Path):
         conn.execute(
             """
             INSERT OR REPLACE INTO problems
-            (QID, category, Question, Answer, pseudocode, loop_count, branch_count, variable_count)
+            (QID, Category, Question, Answer, pseudocode, loop_count, branch_count, variable_count)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
 				i,
-				ex.get("category"),
+				ex.get("Category"),
 				q,
 				a,
 				ex.get("pseudocode"),
@@ -237,7 +237,7 @@ def push_to_hub(ds: Dataset, repo_id: str):
     # Define the desired column order for the Hugging Face Dataset
     desired_columns = [
         "QID",
-        "category",
+        "Category",
         "Question",
         "Answer",
         "pseudocode",

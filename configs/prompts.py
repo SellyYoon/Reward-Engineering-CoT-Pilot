@@ -26,7 +26,7 @@ The summary must be in a JSON format like this:
     "branch_count": <number of branches (if/else statements)>,
     "variable_count": <number of unique variables defined>
 }
-**IMPORTANT: Your final output MUST be ONLY the JSON object, with no other text or explanation outside of it.**
+**IMPORTANT: Your final output MUST be ONLY the JSON object. DO NOT include any other text, explanations, or conversational remarks outside of the JSON. Start and end with the JSON curly braces {} only. All string values within the JSON MUST be enclosed in double quotes. For multi-line strings like pseudocode, use \\n for newlines and ensure all special characters are properly escaped.**
 """
 
 # WHW (Why/How/Which) explanation rules, appended for conditions B and D.
@@ -58,7 +58,7 @@ For Example:
         "how": TEXT
         "which": TEXT
 }
-**IMPORTANT: Your final output MUST be ONLY the JSON object, with no other text or explanation outside of it.**
+**IMPORTANT: Your final output MUST be ONLY the JSON object. DO NOT include any other text, explanations, or conversational remarks outside of the JSON. Start and end with the JSON curly braces {} only. All string values within the JSON MUST be enclosed in double quotes. For multi-line strings like pseudocode, use \\n for newlines and ensure all special characters are properly escaped.**
 """
 
 # TruthfulQA / NewsQA Category Dedicated Evaluator Prompt

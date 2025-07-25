@@ -52,7 +52,7 @@ def run_solver_turn(
         "seed": seed,
         "question_info": {
             "question_num": question_data.get("QID"),
-            "category": question_data.get("category"),
+            "category": question_data.get("Category"),
             "question": question_data.get("Question"),
         },
         "submit": submission_content,
