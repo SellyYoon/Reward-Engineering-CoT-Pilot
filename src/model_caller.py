@@ -13,8 +13,8 @@ from functools import lru_cache
 # --- Client Initialization ---
 
 # Initialize API clients. The libraries will automatically find the API keys from the environment variables
-openai_client = OpenAI()
-anthropic_client = Anthropic()
+openai_client = OpenAI(api_key=settings.OPENAI_API_KEY)
+anthropic_client = Anthropic(api_key=settings.ANTHROPIC_API_KEY)
 
 # --- Local Model Loading ---
 @lru_cache(maxsize=None)
@@ -60,7 +60,8 @@ def call_openai_api(model_id: str, temperature: Optional[float], system_prompt: 
             ],
             temperature=settings.TEMPERATURE,
             max_tokens=settings.MAX_NEW_TOKENS,
-            top_p=settings.TOP_P
+            top_p=settings.TOP_P,
+            response_format={"type": "json_object"},
         )
         return response.choices[0].message.content
     except Exception as e:
@@ -74,14 +75,17 @@ def call_anthropic_api(model_id: str, temperature: Optional[float], system_promp
             model=model_id,
             system=system_prompt,
             messages=[
-                {"role": "user", "content": user_prompt}
+                {"role": "user", "content": user_prompt},
+                {"role": "assistant", "content": "{"}
             ],
             temperature=temperature,
             max_tokens=settings.MAX_NEW_TOKENS,
             top_p=settings.TOP_P,
             top_k=settings.TOP_K
         )
-        return response.content[0].text
+        json_response = "{" + response.content[0].text
+        
+        return json_response
     except Exception as e:
         print(f"Error calling Anthropic API for model {model_id}: {e}")
         return "ERROR: Anthropic API call failed."

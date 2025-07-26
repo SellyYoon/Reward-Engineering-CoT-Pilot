@@ -4,21 +4,22 @@
 import json
 from pathlib import Path
 import sqlite3
+import traceback
+from configs import prompts
 import pandas as pd
 from datasets import Dataset as HFDataset
 from datasets import load_dataset, concatenate_datasets, Dataset
 from huggingface_hub import create_repo
-from openai import OpenAI
 from dotenv import load_dotenv
 from configs import settings
+from model_caller import call_anthropic_api
 
 # Initialize OpenAI client
 project_root = Path(__file__).parent.parent
 load_dotenv(dotenv_path=project_root / ".env")
-client = OpenAI(api_key=settings.OPENAI_API_KEY)
     
 # 1. Define Dataset Creation Logic
-def get_base_datasets(seed: int = 42) -> dict:
+def get_base_datasets(seed: int = settings.DEFAULT_SEED) -> dict:
     """Loads and samples the base datasets from Hugging Face."""
     ds = {}
     ds["truthful"] = load_dataset("domenicrosati/TruthfulQA", split="train").shuffle(seed).select(range(60)).map(lambda ex: {"Category": "domenicrosati/TruthfulQA"})
@@ -42,7 +43,7 @@ def build_master_set() -> Dataset:
     base = get_base_datasets()
     combined = concatenate_datasets(base.values())
     # Create the final master set with multiple shuffles
-    master = combined.shuffle(101).shuffle(202).shuffle(303)
+    master = combined.shuffle(101).shuffle(202).shuffle(303).shuffle(404).shuffle(505)
 
     # Tag instruction complexity via LLM API
     def tag_complexity(ex, idx):
@@ -65,9 +66,7 @@ def build_master_set() -> Dataset:
         else:
             ans = ex.get("Answer") or ex.get("answerKey") or ex.get("answers") or ex.get("solution") or ""
 
-        prompt = f"""
-Convert the following question into Python-style pseudocode, guided by the provided choices and the correct answer. Then count its control structures.
-
+        user_prompt = f"""
 Category:
 {category}
 
@@ -76,30 +75,22 @@ Question:
 
 Answer:
 {ans}
-
-Return a JSON with these fields:
-- pseudocode: the pseudocode solution
-- loop_count: number of loops (for/while)
-- branch_count: number of branches (if/elif/else)
-- variable_count: number of unique variables defined
-ex output:
-{{"pseudocode":"...","loop_count":2,"branch_count":3,"variable_count":5}}
 """
 
         try:
-            response = client.chat.completions.create(
-                model="gpt-4o-mini-2024-07-18",
-                messages=[{"role": "user", "content": prompt}],
+            response = call_anthropic_api(
+                model_id=settings.EVAL_MODELS,
                 temperature=0.0,
-                response_format={"type": "json_object"},
+                system_prompt=prompts.PSEUDOCODE_GENERATION_PROMPT,
+                user_prompt=user_prompt
             )
-            data = json.loads(response.choices[0].message.content)
-                
+                            
         except Exception:
-            data = {"pseudocode": "", "loop_count": -1, "branch_count": -1, "variable_count": -1}
+            traceback.print_exc()
+            response = {"reasoning_steps": [], "pseudocode": "", "loop_count": -1, "branch_count": -1, "variable_count": -1}
         return {
           **ex,
-          "instruction_complexity": data,
+          "instruction_complexity": response,
         }
     master = master.map(tag_complexity, with_indices=True, batched=False)
     return master
@@ -181,6 +172,7 @@ def standardize_and_flatten(ds: Dataset) -> Dataset:
             "Category": category,
             "Question": question,
             "Answer": ans_list,
+            "reasoning_steps": ic.get("reasoning_steps"),
             "pseudocode": ic.get("pseudocode", ""),
             "loop_count": ic.get("loop_count", 0),
             "branch_count": ic.get("branch_count", 0),
@@ -201,6 +193,7 @@ def save_sqlite(ds: Dataset, db_path: Path):
 			Category TEXT,
 			Question TEXT,
 			Answer TEXT,
+            reasoning_steps TEXT,
 			pseudocode TEXT,
 			loop_count INTEGER,
 			branch_count INTEGER,
@@ -210,17 +203,19 @@ def save_sqlite(ds: Dataset, db_path: Path):
     for i, ex in enumerate(ds):
         q = json.dumps(ex.get("Question", []), ensure_ascii=False)
         a = json.dumps(ex.get("Answer", []), ensure_ascii=False)
+        r_steps = json.dumps(ex.get("reasoning_steps", []), ensure_ascii=False)
         conn.execute(
             """
             INSERT OR REPLACE INTO problems
-            (QID, Category, Question, Answer, pseudocode, loop_count, branch_count, variable_count)
+            (QID, Category, Question, Answer, reasoning_steps, pseudocode, loop_count, branch_count, variable_count)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-				i,
+				ex.get("QID"),
 				ex.get("Category"),
 				q,
 				a,
+                r_steps,
 				ex.get("pseudocode"),
 				ex.get("loop_count"),
 				ex.get("branch_count"),
@@ -240,6 +235,7 @@ def push_to_hub(ds: Dataset, repo_id: str):
         "Category",
         "Question",
         "Answer",
+        "reasoning_steps",
         "pseudocode",
         "loop_count",
         "branch_count",

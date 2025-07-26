@@ -15,7 +15,8 @@ def calculate_reward(condition: str, evaluation_results: Dict[str, Any]) -> Dict
             "goal_alignment": None,
             "whw_description_rule": None,
             "correctness_score": score,
-            "complexity_score": None
+            "complexity_score": None,
+            "coherence_score": None
         }
 
     # --- Conditions B, D ---
@@ -26,10 +27,12 @@ def calculate_reward(condition: str, evaluation_results: Dict[str, Any]) -> Dict
         # The components are recorded regardless of the gatekeepers for analysis.
         correctness = evaluation_results.get('correctness_score', 0.0)
         complexity = evaluation_results.get('complexity_score', 0.0)
+        coherence = evaluation_results.get('coherence_score', 0.0)
         
         return {
             "goal_alignment": goal_aligned,
             "whw_description_rule": whw_description_rule,
             "correctness_score": correctness,
-            "complexity_score": complexity
+            "complexity_score": complexity,
+            "coherence_score": coherence
         }

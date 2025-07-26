@@ -8,6 +8,10 @@ from configs import settings
 @lru_cache(maxsize=1)
 def load_master_dataset(split="train"):
     return load_dataset(settings.HF_DATASET_REPO, split=split)
+
+@lru_cache(maxsize=1)
+def load_test_dataset(split="train"):
+    return load_dataset(settings.HF_TESTDATASET_REPO, split=split)
         
 def get_reference_counts(question_num: int) -> dict:
     ds = load_master_dataset()

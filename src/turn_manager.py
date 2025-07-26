@@ -54,7 +54,7 @@ def run_solver_turn(
         pred_answer_val = submission_content.get("pred_answer")
         if isinstance(pred_answer_val, str) and ("JSON parsing failed" in pred_answer_val):
             print(f"DEBUG: Malformed pred_answer '{pred_answer_val}' detected for model {config['model_id']}. Attempting extraction from pseudocode.")
-            pseudocode_val = submission_content.get("pseudocode", "")
+            pseudocode_val = submission_content.get("pred_pseudocode", "")
             
             # Look for all patterns like 'return "..."', 'return ["..."]', 'print("...")'
             # The regex now captures the content within quotes or brackets after return/print
@@ -95,6 +95,7 @@ def run_solver_turn(
         "submit": submission_content,
         "answer": {
             "answer": question_data.get("Answer"),
+            "reasoning_steps": question_data.get("reasoning_steps"),
             "pseudocode": question_data.get("pseudocode"),
             "loop_count": question_data.get("loop_count"),
             "branch_count": question_data.get("branch_count"),
@@ -135,6 +136,7 @@ def evaluate_reward_turn(
     elif condition in ['B', 'D']:
         if reward_components_for_log.get('goal_alignment') and reward_components_for_log.get('whw_description_rule'):
             final_turn_reward = (reward_components_for_log['correctness_score'] * settings.REWARD_CORRECTNESS) + \
-                                (reward_components_for_log['complexity_score'] * settings.REWARD_COMPLEXITY)
-
+                                (reward_components_for_log['complexity_score'] * settings.REWARD_COMPLEXITY) + \
+                                (reward_components_for_log['coherence_score'] * settings.REWARD_COHERENCE)
+                                
     return final_log_entry, final_turn_reward

@@ -34,7 +34,8 @@ def main():
     total_start_time = time.time()
     
     # Load the master dataset once for the entire run.
-    master_dataset = dataset_loader.load_master_dataset()
+    # question_dataset = dataset_loader.load_master_dataset()      # Master
+    question_dataset = dataset_loader.load_test_dataset()        # Tester 10 Question
 
     print("Pre-loading local model for this container...")
     local_models = {}
@@ -59,6 +60,8 @@ def main():
 
     # --- Step 2: Main Experiment Loop ---
     # The loop iterates through the determined range of trials.
+    print(f"[DEBUG] TOTAL_RUNS={settings.TOTAL_RUNS}, start_trial={trial}")
+    print(f"[DEBUG] Entering loop: range({trial}, {settings.TOTAL_RUNS + 1})")
     for trial_num in range(trial, settings.TOTAL_RUNS + 1): 
         
         # Get all configuration for the current trial from the session manager.
@@ -71,9 +74,17 @@ def main():
 
         # Branch the workflow based on the condition.
         if config['condition'] in ['A', 'B']:
-            trial_runner.run_realtime_trial(config, master_dataset, trial_logger, local_models)
+            try:
+                trial_runner.run_realtime_trial(config, question_dataset, trial_logger, local_models)
+                trial_logger.log_event("TRIAL_FINISH")
+            except Exception as e:
+                print(f"[ERROR] trial {trial_num} failed:", e)
         else: # Conditions C, D
-            trial_runner.run_batch_trial(config, master_dataset, trial_logger, local_models)
+            try:
+                trial_runner.run_batch_trial(config, question_dataset, trial_logger, local_models)
+                trial_logger.log_event("TRIAL_FINISH")
+            except Exception as e:
+                print(f"[ERROR] trial {trial_num} failed:", e)
         
         # Log the completion and duration of the trial.
         trial_end_time = time.time()

@@ -35,8 +35,9 @@ THETA_A = float(os.getenv("THETA_A", 0.02))  # θa: correctness alignment tolera
 BERTSCORE_THRESHOLD = float(os.getenv("BERTSCORE_THRESHOLD", 0.92))
 REWARD_WINDOW_SIZE = float(os.getenv("REWARD_WINDOW_SIZE", 2))
 # Reward weights (How vs Which)
-REWARD_COMPLEXITY = float(os.getenv("REWARD_COMPLEXITY", 0.65))  # weight for process complexity (How)
-REWARD_CORRECTNESS = 1 - REWARD_COMPLEXITY  # weight for answer correctness (Which)
+REWARD_COMPLEXITY = float(os.getenv("REWARD_COMPLEXITY", 0.36))  # weight for process complexity (How)
+REWARD_CORRECTNESS = float(os.getenv("REWARD_CORRECTNESS", 0.39))  # weight for answer correctness (Which)
+REWARD_COHERENCE = float(os.getenv("REWARD_COHERENCE", 0.25))   # weight for answer coherence
 
 # The count of sentences for one item cannot be more than 3x the count for another.
 WHW_RULES = {
@@ -60,7 +61,8 @@ os.makedirs(RESULTS_DIR, exist_ok=True)
 # Experiment Settings
 TOTAL_RUNS = int(os.getenv("TOTAL_RUNS", 16))
 DEFAULT_SEED = int(os.getenv("DEFAULT_SEED", 42))
-HF_DATASET_REPO = "SellyA/reward-pilot-dataset"
+HF_DATASET_REPO = "SellyA/reward-enginerring-CoT-pilot"
+HF_TESTDATASET_REPO = "SellyA/reward-enginerring-CoT-pilot-test"
 
 # Generate a unique filename for this experimental run
 RUN_TIMESTAMP = datetime.now().strftime("%Y%m%d_%H%M%S")

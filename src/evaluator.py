@@ -158,6 +158,37 @@ class RewardEvaluator(BasicEvaluator):
         
         return 1.0 if max(err_b, err_l, err_v) <= settings.THETA_C else 0.0
         
+    def coherence_eval(self, submission_data: dict) -> float:
+        """'How': Evaluates if the pseudocode faithfully implements the reasoning_steps."""
+        model_submission = submission_data.get('submit', {})
+        reasoning_steps = model_submission.get('reasoning_steps')
+        pseudocode = model_submission.get('pseudocode')
+
+        # 만약 reasoning_steps나 pseudocode가 없다면 일관성을 평가할 수 없음
+        if not reasoning_steps or not pseudocode:
+            return 0.0
+
+        user_prompt = f"""
+### Model's Reasoning Steps
+{reasoning_steps}
+
+### Model's Submitted Pseudocode
+{pseudocode}
+"""
+        
+        response_text = model_caller.call_anthropic_api(
+            model_id=settings.EVAL_MODELS, # Judge LLM
+            system_prompt=prompts.EVALUATOR_COHERENCE_PROMPT,
+            user_prompt=user_prompt,
+            temperature=0.0
+        )
+        try:
+            response_json = json.loads(response_text)
+            return 1.0 if response_json.get('coherence') else 0.0
+        except:
+            print(f"Warning: Coherence Judge LLM response not parsable. Raw response: {response_text}...")
+            return 0.0
+        
     def reasoning_process_goal_eval(self, model_name:str, submission_data: dict) -> float:
         """
         'Why': Calls the Judge LLM to evaluate the alignment of the reasoning process.
@@ -194,6 +225,7 @@ Reference Answer: {answer_info.get('answer')}
         except:
             print(f"Warning: Judge LLM response not parsable for QID {question_info.get('QID')}. Raw response: {response_text[:200]}...")
             return 0.0
+
 
     def whw_condition_eval(self, whw_description: dict) -> tuple[bool, dict]:
         """Evaluates whether the WHW (Why/How/Which) explanation rules are met."""
@@ -240,6 +272,7 @@ Reference Answer: {answer_info.get('answer')}
                 "correctness_score": 0.0,
                 "complexity_score": 0.0,
                 "goal_alignment": False,
+                "coherence_score": 0.0,
                 "count_whw": {'why': 0, 'how': 0, 'which': 0},
                 "whw_condition": False
             }
@@ -253,17 +286,19 @@ Reference Answer: {answer_info.get('answer')}
             question_num=question_info['question_num'],
             submission_counts=submit_info 
         )
+        coherence = self.coherence_eval(submission_data)
+        whw_met, whw_counts = self.whw_condition_eval(
+            whw_description=submit_info.get('whw_description', {})
+        )
         goal_alignment = self.reasoning_process_goal_eval(
              model_name=submission_data.get('config', {}).get('model_name', 'unknown_model'), # Get model_name from submission_data's config
              submission_data=submission_data
-        )
-        whw_met, whw_counts = self.whw_condition_eval(
-            whw_description=submit_info.get('whw_description', {})
         )
 
         return {
             "correctness_score": correctness,
             "complexity_score": complexity,
+			"coherence_score": coherence,
             "goal_alignment": goal_alignment == 1.0,
             "count_whw": whw_counts,
             "whw_condition": whw_met
