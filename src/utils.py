@@ -2,12 +2,14 @@
 # A collection of utility functions for the experiment.
 
 import json
+from pathlib import Path
 import re
 import time
 import os
 import shutil
 from datetime import datetime, timezone
 from functools import wraps
+from typing import Any, Dict
 import torch
 from configs import settings, prompts
 
@@ -84,6 +86,24 @@ def parse_model_json_output(response_text: str) -> dict:
         error_message = f"Unexpected error parsing model output: {e}. Raw response start: {response_text}..."
         print(f"Error: {error_message}")
         return {"pred_answer": error_message, "error": error_message}
+    
+def log_raw_response(context: Dict[str, Any], response_text: str, model_id: str, session_id: int):
+    """
+    Safely record the original response of the model to a file before parsing it.
+    """
+    log_path = settings.BACKUP_DIR / {model_id} / f"{session_id}_responses.jsonl"
+    
+    log_entry = {
+        "qid": context.get("QID"),
+        "context": context,
+        "raw_response": response_text
+    }
+    
+    try:
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
+    except Exception as e:
+        print(f"CRITICAL WARNING: Failed to write raw response to log file: {e}")
     
 def backup(session_id: str, model_id: str):
     """

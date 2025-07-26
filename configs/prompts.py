@@ -1,7 +1,7 @@
 # prompts.py
 # Finalized system prompts for the Reward Engineering Pilot experiment.
 
-# 1. Prompt Templates (Raw text)
+# Prompt For Apllicant Model: 1. Prompt Templates (Raw text)
 SESSION_START_PROMPT = """
 ----- SESSION_START_PROMPT -----
 You are an advanced AI assistant participating in a problem-solving experiment.
@@ -13,7 +13,7 @@ Please follow these instructions carefully to solve the problem.
 4. Direct web search is not allowed.
 """
 
-# Core task instructions appended for every problem.
+# Prompt For Apllicant Model: 2-A. Core task instructions appended for every problem.
 CORE_TASK_PROMPT = """
 ----- CORE_TASK_PROMPT -----
 Your entire reasoning process must be written as a formal pseudocode.
@@ -44,7 +44,7 @@ The summary must be in a JSON format like this:
     - Use def for function declarations
 """
 
-# WHW (Why/How/Which) explanation rules, appended for conditions B and D.
+# Prompt For Apllicant Model: 2-B. WHW (Why/How/Which) explanation rules, appended for conditions B and D.
 CORE_TASK_WHW_PROMPT = """
 ----- REWARD_CONDITION_PROMPT -----
 Your entire reasoning process must be written as a formal pseudocode.
@@ -91,6 +91,7 @@ For Example:
     - Use def for function declarations
 """
 
+# Prompt for pseudocode answer generation model
 PSEUDOCODE_GENERATION_PROMPT = """
 You are an expert algorithm designer. Your task is to analyze a problem and write a clear, language-agnostic pseudocode algorithm that logically solves it.
 
@@ -147,6 +148,6 @@ PRIMARY EVALUATION CRITERIA:
 OUTPUT FORMAT: 
 If the criteria are met, return the value “rpg”  and "coherence" as a Boolean.
 Based on your evaluation, respond in the following JSON format. 
-{“question”: {“num”: {$question_num}, "coherence", “rpg”: BOOLEAN}}
+{“question”: {“num”: {$question_num}, "coherence": BOOLEAN, “rpg”: BOOLEAN}}
 **IMPORTANT: Your final output MUST be ONLY the JSON object, with no other text or explanation outside of it.**
 """

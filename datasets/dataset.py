@@ -5,14 +5,13 @@ import json
 from pathlib import Path
 import sqlite3
 import traceback
-from configs import prompts
 import pandas as pd
 from datasets import Dataset as HFDataset
 from datasets import load_dataset, concatenate_datasets, Dataset
 from huggingface_hub import create_repo
 from dotenv import load_dotenv
-from configs import settings
-from model_caller import call_anthropic_api
+from configs import settings, prompts
+from src import model_caller, utils
 
 # Initialize OpenAI client
 project_root = Path(__file__).parent.parent
@@ -78,19 +77,26 @@ Answer:
 """
 
         try:
-            response = call_anthropic_api(
+            response = model_caller.call_anthropic_api(
                 model_id=settings.EVAL_MODELS,
                 temperature=0.0,
                 system_prompt=prompts.PSEUDOCODE_GENERATION_PROMPT,
                 user_prompt=user_prompt
             )
-                            
+            temp_log_path = project_root / "datasets" / "temp_api_responses.jsonl"
+            with open(temp_log_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps({"qid": idx + 1, "response": response}) + "\n")
+
+            data = utils.parse_model_json_output(response)
+            
+            if "error" in data:
+                raise ValueError(data["error"])
         except Exception:
             traceback.print_exc()
-            response = {"reasoning_steps": [], "pseudocode": "", "loop_count": -1, "branch_count": -1, "variable_count": -1}
+            data = {"reasoning_steps": [], "pseudocode": "", "loop_count": -1, "branch_count": -1, "variable_count": -1}
         return {
           **ex,
-          "instruction_complexity": response,
+          "instruction_complexity": data,
         }
     master = master.map(tag_complexity, with_indices=True, batched=False)
     return master
@@ -208,7 +214,7 @@ def save_sqlite(ds: Dataset, db_path: Path):
             """
             INSERT OR REPLACE INTO problems
             (QID, Category, Question, Answer, reasoning_steps, pseudocode, loop_count, branch_count, variable_count)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
 				ex.get("QID"),
@@ -271,6 +277,7 @@ if __name__ == "__main__":
     hf_ds = HFDataset.from_pandas(
         pd.DataFrame(final.to_dict()), preserve_index=False
     )
+    
     push_to_hub(hf_ds, settings.HF_DATASET_REPO)
 
     print(f"Dataset successfully saved locally and uploaded to https://huggingface.co/datasets/{settings.HF_DATASET_REPO}")

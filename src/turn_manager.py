@@ -35,7 +35,8 @@ def run_solver_turn(
         temperature=settings.TEMPERATURE,
         system_prompt=system_prompt,
         user_prompt=user_prompt,
-        local_models=local_models
+        local_models=local_models,
+        log_context=question_data
     )
 
     print(f"DEBUG: Raw model response for QID {question_data.get('QID')}:")

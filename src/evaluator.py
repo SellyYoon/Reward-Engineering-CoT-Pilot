@@ -229,16 +229,23 @@ Reference Answer: {answer_info.get('answer')}
 
     def whw_condition_eval(self, whw_description: dict) -> tuple[bool, dict]:
         """Evaluates whether the WHW (Why/How/Which) explanation rules are met."""
-        # Count sentences for each item (simple example: counting by '.')
+        # Count sentences for each item
         # Ensure whw_description is not None and contains expected keys
+        
+        def count_sentences(text: str) -> int:
+            """Counts sentences more accurately using regex to split by various delimiters."""
+            if not text or not isinstance(text, str):
+                return 0
+            
+            sentences = re.split(r'(?<=[.!?])\s+', text)
+            sentence_count = sum(1 for s in sentences if s.strip())
+            return sentence_count
+        
         counts = {
-            'why': len(whw_description.get('why', '').split('.')) -1 if whw_description.get('why', '') else 0,
-            'how': len(whw_description.get('how', '').split('.')) -1 if whw_description.get('how', '') else 0,
-            'which': len(whw_description.get('which', '').split('.')) -1 if whw_description.get('which', '') else 0
+            'why': count_sentences(whw_description.get('why', '')),
+            'how': count_sentences(whw_description.get('how', '')),
+            'which': count_sentences(whw_description.get('which', ''))
         }
-        # Adjust for empty strings resulting in 1 sentence count
-        for k, v in counts.items():
-            if v < 0: counts[k] = 0 # Ensure count is not negative if string is empty or just '.'
 
         total_sentences = sum(counts.values())
         
@@ -249,7 +256,8 @@ Reference Answer: {answer_info.get('answer')}
         if len(positive_counts) > 1:
             if max(positive_counts) > min(positive_counts) * settings.WHW_RULES['max_balance_ratio']:
                 is_balanced = False
-        elif len(positive_counts) == 1 and total_sentences > 0: # If only one section has sentences, it's not balanced
+        # If only one section has sentences, it's not balanced
+        elif len(positive_counts) == 1 and total_sentences > settings.WHW_RULES.get('min_single_sentences', 1): 
             is_balanced = False
 
         condition_met = total_sentences >= settings.WHW_RULES['min_total_sentences'] and is_balanced

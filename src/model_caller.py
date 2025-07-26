@@ -1,14 +1,15 @@
 # src/model_caller.py
 # Handles inference calls to both API-based and local LLMs.
 
+import torch
 import traceback
 from typing import Optional
-import torch
 from openai import OpenAI
 from anthropic import Anthropic
 from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
-from configs import settings
 from functools import lru_cache
+from configs import settings
+from src import utils
 
 # --- Client Initialization ---
 
@@ -49,7 +50,7 @@ def load_local_model(model_id: str):
 
 # --- Inference Functions ---
 
-def call_openai_api(model_id: str, temperature: Optional[float], system_prompt: str, user_prompt: str) -> str:
+def call_openai_api(model_id: str, temperature: Optional[float], system_prompt: str, user_prompt: str, context: Optional[dict] = None) -> str:
     """Calls the OpenAI API and returns the response text."""
     try:
         response = openai_client.chat.completions.create(
@@ -63,12 +64,16 @@ def call_openai_api(model_id: str, temperature: Optional[float], system_prompt: 
             top_p=settings.TOP_P,
             response_format={"type": "json_object"},
         )
-        return response.choices[0].message.content
+        json_response = response.choices[0].message.content
+        log_context = context or {}
+        log_context['model_id'] = model_id
+        utils.log_raw_response(log_context, json_response)
+        return json_response
     except Exception as e:
         print(f"Error calling OpenAI API for model {model_id}: {e}")
         return "ERROR: OpenAI API call failed."
 
-def call_anthropic_api(model_id: str, temperature: Optional[float], system_prompt: str, user_prompt: str) -> str:
+def call_anthropic_api(model_id: str, temperature: Optional[float], system_prompt: str, user_prompt: str, context: Optional[dict] = None) -> str:
     """Calls the Anthropic API and returns the response text."""
     try:
         response = anthropic_client.messages.create(
@@ -84,13 +89,16 @@ def call_anthropic_api(model_id: str, temperature: Optional[float], system_promp
             top_k=settings.TOP_K
         )
         json_response = "{" + response.content[0].text
-        
+        log_context = context or {}
+        log_context['model_id'] = model_id
+        utils.log_raw_response(log_context, json_response)
         return json_response
+        
     except Exception as e:
         print(f"Error calling Anthropic API for model {model_id}: {e}")
         return "ERROR: Anthropic API call failed."
 
-def call_local_model(model, model_id: str, tokenizer, system_prompt: str, user_prompt: str) -> str:
+def call_local_model(model, model_id: str, tokenizer, system_prompt: str, user_prompt: str, context: Optional[dict] = None) -> str:
     """Generates a response from a loaded local model."""
     try:
         # Determine prompt format based on model_id
@@ -132,8 +140,13 @@ def call_local_model(model, model_id: str, tokenizer, system_prompt: str, user_p
         )
 
         # Decode and return the response
-        response_text = tokenizer.decode(outputs[0][input_ids.shape[-1]:], skip_special_tokens=True)
-        return response_text
+        response = tokenizer.decode(outputs[0][input_ids.shape[-1]:], skip_special_tokens=True)
+        json_response = response.choices[0].message.content
+        log_context = context or {}
+        log_context['model_id'] = model_id
+        utils.log_raw_response(log_context, json_response)
+        return response
+    
     except Exception as e:
         print(f"Error during local model inference for {model_id}: {type(e).__name__}: {e}")
         if 'input_ids' in locals() and isinstance(input_ids, torch.Tensor):
@@ -152,7 +165,8 @@ def dispatch_solver_call(
     temperature: Optional[float],   
     system_prompt: str, 
     user_prompt: str, 
-    local_models: Optional[dict] = None
+    local_models: Optional[dict] = None,
+    log_context: Optional[dict] = None
 ) -> str:
     """
     Finds the solver model config for the given sbx_id and calls it.
@@ -167,9 +181,9 @@ def dispatch_solver_call(
     
     # Call the appropriate function depending on the model type
     if model_type == "api_openai":
-        return call_openai_api(model_id, temperature, system_prompt, user_prompt)
+        return call_openai_api(model_id, temperature, system_prompt, user_prompt, context=log_context)
     elif model_type == "api_anthropic":
-        return call_anthropic_api(model_id, temperature, system_prompt, user_prompt)
+        return call_anthropic_api(model_id, temperature, system_prompt, user_prompt, context=log_context)
     elif model_type == "local":
         if not local_models or model_id not in local_models:
             raise ValueError(f"Local model {model_id} was not pre-loaded.")
@@ -177,4 +191,4 @@ def dispatch_solver_call(
         loaded_model_obj = local_models[model_id]
         model = loaded_model_obj["model"]
         tokenizer = loaded_model_obj["tokenizer"]
-        return call_local_model(model, model_id, tokenizer, system_prompt, user_prompt)
+        return call_local_model(model, model_id, tokenizer, system_prompt, user_prompt, context=log_context)
