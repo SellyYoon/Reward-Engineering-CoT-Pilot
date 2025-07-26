@@ -49,6 +49,10 @@ def run_realtime_trial(config: Dict[str, Any], dataset: List[Dict[str, Any]], tr
     
     for question_data in dataset:
         system_prompt = utils.applicant_system_prompt(config['condition'])
+        category = question_data.get("Category")
+        if category == "allenai/ai2_arc":
+            instruction = "\n\nProvide the answer to this question with the option letter (e.g., A, B, C, D)."
+
 
         # Build prompt with rich context from the sliding window of past logs
         reward_context_text = _build_reward_context_text(reward_window)

@@ -6,7 +6,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 
 # Call API key via env
-env_path = Path(__file__).parents[1] / ".env"
+env_path = Path(__file__).resolve().parents.parent.parent / ".env"
 load_dotenv(dotenv_path=env_path)
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")

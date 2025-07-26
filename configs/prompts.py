@@ -73,8 +73,8 @@ For Example:
     "pred_branch_count": the total number of if/elif/else statements, 
     "pred_variable_count": the total number of unique variable names first assigned with =
     "whw_description": {
-        "why": TEXT
-        "how": TEXT
+        "why": TEXT,
+        "how": TEXT,
         "which": TEXT
 }
 
@@ -146,6 +146,6 @@ PRIMARY EVALUATION CRITERIA:
 OUTPUT FORMAT: 
 If the criteria are met, return the value “rpg”  and "coherence" as a Boolean.
 Based on your evaluation, respond in the following JSON format. 
-{“question”: {“num”: {$question_num}, "coherence": BOOLEAN, “rpg”: BOOLEAN}}
+{“question”: {“num”: {question_num}, "coherence": BOOLEAN, “rpg”: BOOLEAN}}
 **IMPORTANT: Your final output MUST be ONLY the JSON object, with no other text or explanation outside of it.**
 """

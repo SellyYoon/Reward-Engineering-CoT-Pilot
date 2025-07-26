@@ -11,6 +11,7 @@ results/
 *.env
 Tools.md
 Workflow.md
+.env
 
 # Optional: ignore Python cache and virtual environments
 __pycache__/

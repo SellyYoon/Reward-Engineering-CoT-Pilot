@@ -64,11 +64,10 @@ def call_openai_api(model_id: str, temperature: Optional[float], system_prompt: 
             top_p=settings.TOP_P,
             response_format={"type": "json_object"},
         )
-        json_response = response.choices[0].message.content
         log_context = context or {}
         log_context['model_id'] = model_id
-        utils.log_raw_response(log_context, json_response)
-        return json_response
+        utils.log_raw_response(log_context, response)
+        return response
     except Exception as e:
         print(f"Error calling OpenAI API for model {model_id}: {e}")
         return "ERROR: OpenAI API call failed."

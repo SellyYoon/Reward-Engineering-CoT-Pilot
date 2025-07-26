@@ -20,7 +20,7 @@ services:
             - '/mnt/e/CoT_Result/logs:/logs'
             - '/mnt/e/CoT_Result/backups:/backups'
         working_dir: /app
-        command: bash -c "cd /app && conda run -n pilot python main.py --model ${MODEL_ID}"
+        command: conda run -n pilot python main.py
     sbx2:
         container_name: sbx2_claude4
         build:
@@ -39,7 +39,7 @@ services:
             - '/mnt/e/CoT_Result/logs:/logs'
             - '/mnt/e/CoT_Result/backups:/backups'
         working_dir: /app
-        command: bash -c "cd /app && conda run -n pilot python main.py --model ${MODEL_ID}"
+        command: conda run -n pilot python main.py
     sbx3:
         container_name: sbx3_llama3
         build:
@@ -58,7 +58,7 @@ services:
             - '/mnt/e/CoT_Result/logs:/logs'
             - '/mnt/e/CoT_Result/backups:/backups'
         working_dir: /app
-        command: bash -c "cd /app && conda run -n pilot python main.py --model ${MODEL_ID}"
+        command: conda run -n pilot python main.py
     sbx4:
         container_name: sbx4_mistral7b
         build:
@@ -77,4 +77,4 @@ services:
             - '/mnt/e/CoT_Result/logs:/logs'
             - '/mnt/e/CoT_Result/backups:/backups'
         working_dir: /app
-        command: bash -c "cd /app && conda run -n pilot python main.py --model ${MODEL_ID}"
+        command: conda run -n pilot python main.py

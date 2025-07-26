@@ -16,4 +16,3 @@ master.db
 # Python 관련 캐시 및 환경 파일 제외
 __pycache__/
 *.pyc
-.env
