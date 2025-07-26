@@ -137,7 +137,7 @@ class BasicEvaluator:
 		correctness = self.correctness_eval(
 			pred_answer=pred_answer,
 			ref_answer=answer_info['answer'],
-			category=question_info['Category']
+			category=question_info['category']
 		)
 		return {"correctness_score": correctness}
 
@@ -247,7 +247,7 @@ Reference Answer: {answer_info.get('answer')}
         correctness = self.correctness_eval(
             pred_answer=pred_answer,
             ref_answer=answer_info['answer'],
-            category=question_info['Category']
+            category=question_info['category']
         )
         complexity = self.complexity_eval(
             question_num=question_info['question_num'],

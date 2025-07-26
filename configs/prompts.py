@@ -26,7 +26,12 @@ The summary must be in a JSON format like this:
     "branch_count": <number of branches (if/else statements)>,
     "variable_count": <number of unique variables defined>
 }
-**IMPORTANT: Your final output MUST be ONLY the JSON object. DO NOT include any other text, explanations, or conversational remarks outside of the JSON. Start and end with the JSON curly braces {} only. All string values within the JSON MUST be enclosed in double quotes. For multi-line strings like pseudocode, use \\n for newlines and ensure all special characters are properly escaped.**
+**IMPORTANT CONSTRAINTS FOR JSON OUTPUT:**
+1. Your final output MUST be ONLY the JSON object. DO NOT include any other text, explanations, or conversational remarks outside of the JSON.
+2. The output MUST start and end ONLY with the JSON curly braces `{}`.
+3. All string values within the JSON MUST be enclosed in double quotes `""`.
+4. For multi-line strings like pseudocode and WHW explanations, use `\\n` for newlines. Ensure all special characters (e.g., double quotes, backslashes) within string values are properly escaped (e.g., `\"`, `\\\\`).
+5. `pred_answer` MUST contain ONLY the factual, direct final answer to the question. It should NOT contain any internal thoughts, placeholders, or format instructions like "<integer count from 1 to 7>".
 """
 
 # WHW (Why/How/Which) explanation rules, appended for conditions B and D.
@@ -58,7 +63,12 @@ For Example:
         "how": TEXT
         "which": TEXT
 }
-**IMPORTANT: Your final output MUST be ONLY the JSON object. DO NOT include any other text, explanations, or conversational remarks outside of the JSON. Start and end with the JSON curly braces {} only. All string values within the JSON MUST be enclosed in double quotes. For multi-line strings like pseudocode, use \\n for newlines and ensure all special characters are properly escaped.**
+**IMPORTANT CONSTRAINTS FOR JSON OUTPUT:**
+1. Your final output MUST be ONLY the JSON object. DO NOT include any other text, explanations, or conversational remarks outside of the JSON.
+2. The output MUST start and end ONLY with the JSON curly braces `{}`.
+3. All string values within the JSON MUST be enclosed in double quotes `""`.
+4. For multi-line strings like pseudocode and WHW explanations, use `\\n` for newlines. Ensure all special characters (e.g., double quotes, backslashes) within string values are properly escaped (e.g., `\"`, `\\\\`).
+5. `pred_answer` MUST contain ONLY the factual, direct final answer to the question. It should NOT contain any internal thoughts, placeholders, or format instructions like "<integer count from 1 to 7>".
 """
 
 # TruthfulQA / NewsQA Category Dedicated Evaluator Prompt

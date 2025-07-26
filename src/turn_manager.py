@@ -1,6 +1,7 @@
 # src/turn_manager.py
 # Manages the logic for a single problem-solving turn.
 
+import re
 from typing import Dict, Any, Optional, Tuple
 from configs import settings
 from src import model_caller, evaluator, reward_system, utils
@@ -45,6 +46,42 @@ def run_solver_turn(
     # 2. Parse the model's JSON output
     # Assumes the entire model output is a parsable JSON string as per the prompts.
     submission_content = utils.parse_model_json_output(raw_response)
+    
+        # 3. Add specific logic to reassign pred_answer for Llama/Mistral models
+    #    if it's malformed (e.g., contains 'str(i)' or previous JSON parsing error message).
+    #    This check is based on model_id and the content of pred_answer.
+    if config['model_id'] in ["meta-llama/Llama-3.1-8B-Instruct", "mistralai/Mistral-7B-Instruct-v0.3"]:
+        pred_answer_val = submission_content.get("pred_answer")
+        if isinstance(pred_answer_val, str) and ("JSON parsing failed" in pred_answer_val):
+            print(f"DEBUG: Malformed pred_answer '{pred_answer_val}' detected for model {config['model_id']}. Attempting extraction from pseudocode.")
+            pseudocode_val = submission_content.get("pseudocode", "")
+            
+            # Look for all patterns like 'return "..."', 'return ["..."]', 'print("...")'
+            # The regex now captures the content within quotes or brackets after return/print
+            # It also handles the "pred_answer":"..." pattern from the raw error string
+            answer_patterns = re.findall(
+                r"return\s*\"(.*?)\"|"  # return "answer"
+                r"return\s*\[\"(.*?)\"\]|" # return ["answer"]
+                r"print\s*\(\"(.*?)\"\)|" # print("answer")
+                r"print\s*\((\d+)\)|" # print(number) - for numerical answers like 608
+                r"\"pred_answer\":\s*\"(.*?)\"", # "pred_answer":"answer" from previous error strings
+                pseudocode_val, 
+                re.DOTALL
+            )
+            
+            extracted_answer = None
+            # Iterate through all found patterns and get the last non-empty one
+            for match_tuple in answer_patterns:
+                for group_val in match_tuple:
+                    if group_val is not None and group_val.strip() != "":
+                        extracted_answer = group_val.strip() # Update with the latest found value
+
+            if extracted_answer:
+                print(f"DEBUG: Successfully extracted '{extracted_answer}' from pseudocode (last occurrence).")
+                submission_content["pred_answer"] = extracted_answer
+            else:
+                # Fallback if no specific answer found in pseudocode or from malformed string
+                submission_content["pred_answer"] = "Extraction failed from malformed pseudocode"
 
     # 3. Assemble the final data object to match the exact log format
     submission_log_entry = {

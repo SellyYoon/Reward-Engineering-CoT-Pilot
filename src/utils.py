@@ -2,6 +2,7 @@
 # A collection of utility functions for the experiment.
 
 import json
+import re
 import time
 import os
 import shutil
@@ -46,47 +47,44 @@ def parse_model_json_output(response_text: str) -> dict:
     It handles Markdown code blocks and extracts the pure JSON.
     Also processes keys to remove leading/trailing spaces.
     """
-    # 1. Attempt to remove Markdown code blocks
-    json_start_tag = "```json"
-    json_end_tag = "```"
-    
-    if json_start_tag in response_text and json_end_tag in response_text:
-        start_index = response_text.find(json_start_tag) + len(json_start_tag)
-        end_index = response_text.rfind(json_end_tag)
-        if start_index != -1 and end_index != -1 and end_index > start_index:
-            json_str = response_text[start_index:end_index].strip()
-        else:
-            json_str = response_text
-    else:
-        json_str = response_text
+    json_str = response_text
 
-    # 2. Find and extract the first ‘{’ and last ‘}’ from a pure JSON string.
-    try:
+    # 1. Attempt to extract content from Markdown code blocks first
+    match = re.search(r"```json\s*(\{.*?\})\s*```", response_text, re.DOTALL)
+    if match:
+        json_str = match.group(1).strip()
+    else:
+        # If no markdown block, try to find the first and last curly braces
         final_start_index = json_str.find('{')
         final_end_index = json_str.rfind('}') + 1
-        
-        if final_start_index == -1 or final_end_index == 0:
-            error_message = f"Model output did not contain a valid JSON object after markdown parsing. Raw response start: {response_text[:200]}..."
+
+        if final_start_index != -1 and final_end_index != 0 and final_end_index > final_start_index:
+            json_str = json_str[final_start_index:final_end_index].strip()
+        else:
+            # If still no clear JSON, return an error.
+            error_message = f"Model output did not contain a valid JSON object or markdown block. Raw response start: {response_text}..."
             print(f"Warning: {error_message}")
             return {"pred_answer": error_message, "error": error_message}
-        
-        pure_json_str = json_str[final_start_index:final_end_index]
-        raw_data = json.loads(pure_json_str)
-        
+
+    try:
+        raw_data = json.loads(json_str)
+
         # Process keys to remove leading/trailing spaces
         cleaned_data = {}
         for k, v in raw_data.items():
             cleaned_data[k.strip()] = v
+
         return cleaned_data
+
     except json.JSONDecodeError as e:
-        error_message = f"JSON parsing failed after extraction. Raw extracted JSON: {pure_json_str[:200]}... Error: {e}"
+        error_message = f"JSON parsing failed after extraction. Raw extracted JSON: {json_str}... Error: {e}"
         print(f"Error: {error_message}")
         return {"pred_answer": error_message, "error": error_message}
     except Exception as e:
-        error_message = f"Unexpected error parsing model output: {e}. Raw response start: {response_text[:200]}..."
+        error_message = f"Unexpected error parsing model output: {e}. Raw response start: {response_text}..."
         print(f"Error: {error_message}")
         return {"pred_answer": error_message, "error": error_message}
-
+    
 def backup(session_id: str, model_id: str):
     """
     Finds all logs for a given session and moves them to a backup directory.
