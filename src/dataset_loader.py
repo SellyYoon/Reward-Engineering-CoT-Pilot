@@ -6,15 +6,11 @@ from datasets import load_dataset
 from configs import settings
 
 @lru_cache(maxsize=1)
-def load_master_dataset(split="train"):
+def load_pilot_dataset(split: str):
     return load_dataset(settings.HF_DATASET_REPO, split=split)
 
-@lru_cache(maxsize=1)
-def load_test_dataset(split="train"):
-    return load_dataset(settings.HF_TESTDATASET_REPO, split=split)
-        
 def get_reference_counts(question_num: int) -> dict:
-    ds = load_master_dataset()
+    ds = load_pilot_dataset()
     ic = ds[question_num]["instruction_complexity"]
     return {
         "branch_count": ic.get("branch_count", 0),
@@ -26,7 +22,7 @@ def get_reference_counts(question_num: int) -> dict:
 # This allows you to test this module by running `python src/dataset_loader.py`
 if __name__ == "__main__":
     print("--- Testing dataset_loader.py ---")
-    master_dataset = load_master_dataset()
+    master_dataset = load_pilot_dataset()
     
     if master_dataset:
         print("\n--- First example from the dataset ---")

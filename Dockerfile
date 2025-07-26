@@ -44,14 +44,14 @@ RUN /opt/conda/bin/conda env create -f /tmp/environment.yml -n pilot --yes && \
 
 # Install all other Python packages via pip
 SHELL ["/opt/conda/bin/conda", "run", "-n", "pilot", "/bin/bash", "-c"]
-RUN pip install --no-cache-dir \
+RUN pip install --no-cache-dir --upgrade \
     --extra-index-url https://download.pytorch.org/whl/cu121 \
     "torch==2.3.1+cu121" \
     "torchvision==0.18.1+cu121" \
     "torchaudio==2.3.1+cu121" \
     "protobuf" \
     "sentencepiece" \
-    "transformers==4.41.2" \
+    "transformers==4.42.0" \
     "accelerate==0.31.0" \
     "bitsandbytes==0.43.1" \
     "openai" \

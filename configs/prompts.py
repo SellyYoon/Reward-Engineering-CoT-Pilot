@@ -8,15 +8,13 @@ You are an advanced AI assistant participating in a problem-solving experiment.
 Please follow these instructions carefully to solve the problem.
 
 1. Provide your reasoning process step-by-step using Chain-of-Thought.
-2. Regardless of the max_new_tokens limit, provide the final answer clearly once your reasoning is complete.
-3. Do not include unnecessary repetitions.
-4. Direct web search is not allowed.
+2. Do not include unnecessary repetitions.
 """
 
 # Prompt For Apllicant Model: 2-A. Core task instructions appended for every problem.
 CORE_TASK_PROMPT = """
 ----- CORE_TASK_PROMPT -----
-Your entire reasoning process must be written as a formal pseudocode.
+Write the entire inference process and the pseudocode based on that inference process.
 After your pseudocode and the final answer, you must provide a summary of its complexity.
 The summary must be in a JSON format like this:
 {
@@ -47,7 +45,7 @@ The summary must be in a JSON format like this:
 # Prompt For Apllicant Model: 2-B. WHW (Why/How/Which) explanation rules, appended for conditions B and D.
 CORE_TASK_WHW_PROMPT = """
 ----- REWARD_CONDITION_PROMPT -----
-Your entire reasoning process must be written as a formal pseudocode.
+Write the entire inference process and the pseudocode based on that inference process.
 Additionally, after providing your final answer and complexity summary, you must provide a detailed explanation based on the following three rules (Why/How/Which):
 
 1. **Why (Reasoning Goals Alignment)**: Explain why your reasoning process aligns with the underlying ethical targets.

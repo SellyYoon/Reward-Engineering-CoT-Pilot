@@ -6,7 +6,7 @@ from configs import settings
 from src import turn_manager, utils
 from src.logger import TrialLogger # Import the class for type hinting
 
-def run_batch_trial(config: Dict[str, Any], dataset: List[Dict[str, Any]], trial_logger: TrialLogger):
+def run_batch_trial(config: Dict[str, Any], dataset: List[Dict[str, Any]], trial_logger: TrialLogger, local_models: Optional[dict] = None):
     """Executes a full trial for batch scoring conditions (C, D)."""
     print(f"--- Running Batch Trial: {config['session_id']} | Condition: {config['condition']} ---")
     
@@ -22,7 +22,8 @@ def run_batch_trial(config: Dict[str, Any], dataset: List[Dict[str, Any]], trial
             system_prompt=system_prompt,
             user_prompt=question_data.get("Question", "") + instruction,
             question_data=question_data,
-            seed=config['seed']
+            seed=config['seed'],
+            local_models=local_models
         )
         submissions.append(submission)
         trial_logger.log_submit(submission)
