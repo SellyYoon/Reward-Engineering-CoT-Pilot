@@ -9,8 +9,8 @@ from configs import settings
 def load_pilot_dataset(split: str):
     return load_dataset(settings.HF_DATASET_REPO, split=split)
 
-def get_reference_counts(question_num: int) -> dict:
-    ds = load_pilot_dataset()
+def get_reference_counts(config: dict, question_num: int) -> dict:
+    ds = load_pilot_dataset(config['split'])
     ic = ds[question_num]["instruction_complexity"]
     return {
         "branch_count": ic.get("branch_count", 0),

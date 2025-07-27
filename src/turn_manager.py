@@ -27,11 +27,9 @@ def run_solver_turn(
     It calls the model, parses the output, and assembles the submission data object.
     """
     
-    
     # 1. Call the appropriate solver model
     raw_response = model_caller.dispatch_solver_call(
-        sbx_id=config['sbx_id'],
-        model_id=config['model_id'],
+        config=config,
         temperature=settings.TEMPERATURE,
         system_prompt=system_prompt,
         user_prompt=user_prompt,

@@ -87,10 +87,12 @@ def parse_model_json_output(response_text: str) -> dict:
         print(f"Error: {error_message}")
         return {"pred_answer": error_message, "error": error_message}
     
-def log_raw_response(context: Dict[str, Any], response_text: str, model_id: str, session_id: int):
+def log_raw_response(context: Dict[str, Any], response_text: str, config: int):
     """
     Safely record the original response of the model to a file before parsing it.
     """
+    model_id = config['model_id']
+    session_id = config['session_id']
     log_path = settings.BACKUP_DIR / {model_id} / f"{session_id}_responses.jsonl"
     
     log_entry = {

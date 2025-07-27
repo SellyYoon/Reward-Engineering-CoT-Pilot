@@ -6,10 +6,12 @@ from datetime import datetime
 from dotenv import load_dotenv
 
 # Call API key via env
-env_path = Path(__file__).resolve().parents.parent.parent / ".env"
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+env_path = PROJECT_ROOT.parent / ".env"
 load_dotenv(dotenv_path=env_path)
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+HF_API_KEY = os.getenv("HF_API_KEY")
 
 # Model configuration
 APPLICANT_MODELS = [
@@ -46,12 +48,10 @@ WHW_RULES = {
 }
 
 # Paths & repository settings
-# BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) # Project root
-BASE_DIR = Path(__file__).resolve().parent.parent
 LOG_DIR = Path("/logs")
 BACKUP_DIR = Path("/backups")
-DATASET_PATH = Path(os.getenv("DATASET_PATH", BASE_DIR / "datasets"))
-RESULTS_DIR =  Path(os.getenv("RESULTS_DIR", BASE_DIR / "results"))
+DATASET_PATH = Path(os.getenv("DATASET_PATH", PROJECT_ROOT / "datasets"))
+RESULTS_DIR =  Path(os.getenv("RESULTS_DIR", PROJECT_ROOT / "results"))
 # Create directories if they don't exist
 # os.makedirs(LOG_DIR, exist_ok=True)
 # os.makedirs(BACKUP_DIR, exist_ok=True)
@@ -78,4 +78,4 @@ def determine_condition(trial_num: int) -> str:
     elif 13 <= trial_num <= 16:
         return 'D'
     else:
-        raise ValueError(f"Trial number {trial_num} is out of the valid range (1-16).")
+        raise ValueError(f"Trial number {trial_num} is out of the valid range (1-{TOTAL_RUNS}).")

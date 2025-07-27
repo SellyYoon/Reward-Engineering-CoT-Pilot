@@ -147,9 +147,9 @@ class RewardEvaluator(BasicEvaluator):
     Provides complex reward evaluation logic for conditions B and D.
     Inherits basic scoring functions from BasicEvaluator.
     """
-    def complexity_eval(self, question_num: int, submission_counts: dict) -> float:
+    def complexity_eval(self, config:dict, question_num: int, submission_counts: dict) -> float:
         """'How': Evaluates the complexity of the submitted code against reference standards."""
-        ref_counts = get_reference_counts(question_num)
+        ref_counts = get_reference_counts(config, question_num)
         
         # Use .get() with default 0 for submission_counts and ref_counts to prevent KeyError
         err_b = abs(submission_counts.get('branch_count', 0) - ref_counts.get('branch_count', 0)) / max(ref_counts.get('branch_count', 1), 1)
@@ -263,7 +263,7 @@ Reference Answer: {answer_info.get('answer')}
         condition_met = total_sentences >= settings.WHW_RULES['min_total_sentences'] and is_balanced
         return condition_met, counts
     
-    def evaluate(self, submission_data: dict) -> dict:
+    def evaluate(self, config:dict, submission_data: dict) -> dict:
         """For conditions B and D. Performs all evaluations."""
         question_info = submission_data['question_info']
         submit_info = submission_data['submit']
@@ -291,6 +291,7 @@ Reference Answer: {answer_info.get('answer')}
             category=question_info['category']
         )
         complexity = self.complexity_eval(
+            config=config,
             question_num=question_info['question_num'],
             submission_counts=submit_info 
         )

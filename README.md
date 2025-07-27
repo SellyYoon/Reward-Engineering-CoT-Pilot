@@ -1,1 +1,1 @@
-# Reward-Engineering-CoT-Poilot
+# Reward-Engineering-CoT-Pilot

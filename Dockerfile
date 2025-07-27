@@ -8,8 +8,8 @@ ENV PATH="/opt/conda/bin:${PATH}"
 ENV CONDA_ALWAYS_YES="true"
 ENV CONDA_PKGS_DIRS="/tmp/conda_pkgs"
 
-ARG HF_TOKEN="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"
-ENV HF_HOME="/mnt/e/CoT_Result/.cache/huggingface"
+ARG HF_API_KEY
+ARG HF_HOME
 
 # Install Miniconda
 RUN apt-get clean && \

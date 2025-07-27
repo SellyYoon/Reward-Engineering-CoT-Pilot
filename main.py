@@ -20,7 +20,7 @@ from src.logger import MainLogger, TrialLogger
 
 def main():
     """Main function to start and orchestrate the entire experiment."""
-    
+
     # --- Step 1: Initialization ---
     # Get container-specific info from environment variables.
     sbx_id = int(os.environ.get("SBX_ID", 0))
@@ -34,8 +34,9 @@ def main():
     total_start_time = time.time()
     
     # Load the master dataset once for the entire run.
-    # question_dataset = dataset_loader.load_pilot_dataset(split="train")      # Master
-    question_dataset = dataset_loader.load_pilot_dataset(split="test")        # Tester 10 Question
+    # split = "train"  # Master
+    split = "test"  # Tester 10 Question
+    question_dataset = dataset_loader.load_pilot_dataset(split=split)      
 
     print("Pre-loading local model for this container...")
     local_models = {}
@@ -65,7 +66,7 @@ def main():
     for trial_num in range(trial, settings.TOTAL_RUNS + 1): 
         
         # Get all configuration for the current trial from the session manager.
-        config = session_manager.next_session(sbx_id, model_id)
+        config = session_manager.next_session(sbx_id, model_id, split)
         
         # Create a dedicated logger instance for this specific trial.
         trial_logger = TrialLogger(config)

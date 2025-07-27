@@ -18,7 +18,7 @@ def run_batch_trial(config: Dict[str, Any], dataset: List[Dict[str, Any]], trial
             instruction = "\n\nProvide the answer to this question with the option letter (e.g., A, B, C, D)."
 
         submission = turn_manager.run_solver_turn(
-            model_id=config['model_id'],
+            config=config,
             system_prompt=system_prompt,
             user_prompt=question_data.get("Question", "") + instruction,
             question_data=question_data,
@@ -47,16 +47,18 @@ def run_realtime_trial(config: Dict[str, Any], dataset: List[Dict[str, Any]], tr
     final_logs = []
     reward_window = [] # This window will store the last 2 full log dictionaries
     
+    
     for question_data in dataset:
-        system_prompt = utils.applicant_system_prompt(config['condition'])
         category = question_data.get("Category")
-        if category == "allenai/ai2_arc":
-            instruction = "\n\nProvide the answer to this question with the option letter (e.g., A, B, C, D)."
-
-
+        
         # Build prompt with rich context from the sliding window of past logs
+        system_prompt = utils.applicant_system_prompt(config['condition'])
         reward_context_text = _build_reward_context_text(reward_window)
         user_prompt = f"{reward_context_text}\n\n---\n\nQuestion: {question_data.get('Question', '')}"
+        
+        if category == "allenai/ai2_arc":
+            instruction = "\n\nProvide the answer to this question with the option letter (e.g., A, B, C, D)."
+            user_prompt += instruction
 
         submission = turn_manager.run_solver_turn(
             config=config,

@@ -3,6 +3,7 @@
 
 import torch
 import traceback
+from huggingface_hub import login
 from typing import Optional
 from openai import OpenAI
 from anthropic import Anthropic
@@ -16,6 +17,13 @@ from src import utils
 # Initialize API clients. The libraries will automatically find the API keys from the environment variables
 openai_client = OpenAI(api_key=settings.OPENAI_API_KEY)
 anthropic_client = Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+hf_api_key = settings.HF_API_KEY
+if hf_api_key:
+    try:
+        login(token=hf_api_key)
+        print("Successfully logged into Hugging Face Hub.")
+    except Exception as e:
+        print(f"Failed to log into Hugging Face Hub: {e}")
 
 # --- Local Model Loading ---
 @lru_cache(maxsize=None)
@@ -50,9 +58,10 @@ def load_local_model(model_id: str):
 
 # --- Inference Functions ---
 
-def call_openai_api(model_id: str, temperature: Optional[float], system_prompt: str, user_prompt: str, context: Optional[dict] = None) -> str:
+def call_openai_api(config: dict, temperature: Optional[float], system_prompt: str, user_prompt: str, context: Optional[dict] = None) -> str:
     """Calls the OpenAI API and returns the response text."""
     try:
+        model_id = config['model_id']
         response = openai_client.chat.completions.create(
             model=model_id,
             messages=[
@@ -72,9 +81,10 @@ def call_openai_api(model_id: str, temperature: Optional[float], system_prompt: 
         print(f"Error calling OpenAI API for model {model_id}: {e}")
         return "ERROR: OpenAI API call failed."
 
-def call_anthropic_api(model_id: str, temperature: Optional[float], system_prompt: str, user_prompt: str, context: Optional[dict] = None) -> str:
+def call_anthropic_api(config: dict, temperature: Optional[float], system_prompt: str, user_prompt: str, context: Optional[dict] = None) -> str:
     """Calls the Anthropic API and returns the response text."""
     try:
+        model_id = config['model_id']
         response = anthropic_client.messages.create(
             model=model_id,
             system=system_prompt,
@@ -97,10 +107,11 @@ def call_anthropic_api(model_id: str, temperature: Optional[float], system_promp
         print(f"Error calling Anthropic API for model {model_id}: {e}")
         return "ERROR: Anthropic API call failed."
 
-def call_local_model(model, model_id: str, tokenizer, system_prompt: str, user_prompt: str, context: Optional[dict] = None) -> str:
+def call_local_model(model, config: dict, tokenizer, system_prompt: str, user_prompt: str, context: Optional[dict] = None) -> str:
     """Generates a response from a loaded local model."""
     try:
         # Determine prompt format based on model_id
+        model_id = config['model_id']
         if "Mistral" in model_id or "mistralai" in model_id:
             # Mistral Instruct format
             messages = f"<s>[INST] {system_prompt}\n{user_prompt} [/INST]"
@@ -143,7 +154,7 @@ def call_local_model(model, model_id: str, tokenizer, system_prompt: str, user_p
         json_response = response.choices[0].message.content
         log_context = context or {}
         log_context['model_id'] = model_id
-        utils.log_raw_response(log_context, json_response)
+        utils.log_raw_response(log_context, response, model_id, )
         return response
     
     except Exception as e:
@@ -159,9 +170,8 @@ def call_local_model(model, model_id: str, tokenizer, system_prompt: str, user_p
             return "ERROR: Local model inference failed."
 
 def dispatch_solver_call(
-    sbx_id: int, 
-    model_id: str,
-    temperature: Optional[float],   
+    config: dict,
+    temperature: Optional[float],
     system_prompt: str, 
     user_prompt: str, 
     local_models: Optional[dict] = None,
@@ -171,6 +181,8 @@ def dispatch_solver_call(
     Finds the solver model config for the given sbx_id and calls it.
     For local models, it uses the pre-loaded model object.
     """
+    model_id = config['model_id']
+    sbx_id = config['sbx_id']
     # Find model settings corresponding to sbx_id
     model_config = next((m for m in settings.APPLICANT_MODELS if m["sbx_id"] == sbx_id), None)
     if not model_config:
@@ -180,9 +192,9 @@ def dispatch_solver_call(
     
     # Call the appropriate function depending on the model type
     if model_type == "api_openai":
-        return call_openai_api(model_id, temperature, system_prompt, user_prompt, context=log_context)
+        return call_openai_api(config, temperature, system_prompt, user_prompt, context=log_context)
     elif model_type == "api_anthropic":
-        return call_anthropic_api(model_id, temperature, system_prompt, user_prompt, context=log_context)
+        return call_anthropic_api(config, temperature, system_prompt, user_prompt, context=log_context)
     elif model_type == "local":
         if not local_models or model_id not in local_models:
             raise ValueError(f"Local model {model_id} was not pre-loaded.")
@@ -190,4 +202,4 @@ def dispatch_solver_call(
         loaded_model_obj = local_models[model_id]
         model = loaded_model_obj["model"]
         tokenizer = loaded_model_obj["tokenizer"]
-        return call_local_model(model, model_id, tokenizer, system_prompt, user_prompt, context=log_context)
+        return call_local_model(model, config, tokenizer, system_prompt, user_prompt, context=log_context)

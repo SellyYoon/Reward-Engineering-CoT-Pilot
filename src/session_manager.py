@@ -20,7 +20,7 @@ def save_state(sbx_id: int, state: dict):
     with open(state_file, "w") as f:
         json.dump(state, f)
 
-def next_session(sbx_id: int, model_id: str) -> dict:
+def next_session(sbx_id: int, model_id: str, split:str) -> dict:
     """
     Sets up the configuration for the next trial.
     - Increments the trial number.
@@ -46,5 +46,6 @@ def next_session(sbx_id: int, model_id: str) -> dict:
         "trial_num": trial,
         "model_id": model_id,
         "condition": condition,
+        "split": split,
         "seed": settings.DEFAULT_SEED
     }

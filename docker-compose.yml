@@ -7,10 +7,10 @@ services:
         build:
             context: .
             args:
-                - HF_TOKEN=${HF_TOKEN}
+                - HF_API_KEY=${HF_API_KEY}
         runtime: nvidia
         env_file:
-            - ./.env
+            - ../.env
         environment:
             MODEL_ID: gpt-4o-mini-2024-07-18
             SBX_ID: 1
@@ -26,10 +26,10 @@ services:
         build:
             context: .
             args:
-                - HF_TOKEN=${HF_TOKEN}
+                - HF_API_KEY=${HF_API_KEY}
         runtime: nvidia
         env_file:
-            - ./.env
+            - ../.env
         environment:
             MODEL_ID: claude-sonnet-4-20250514
             SBX_ID: 2
@@ -45,10 +45,10 @@ services:
         build:
             context: .
             args:
-                - HF_TOKEN=${HF_TOKEN}
+                - HF_API_KEY=${HF_API_KEY}
         runtime: nvidia
         env_file:
-            - ./.env
+            - ../.env
         environment:
             MODEL_ID: meta-llama/Llama-3.1-8B-Instruct
             SBX_ID: 3
@@ -64,10 +64,10 @@ services:
         build:
             context: .
             args:
-                - HF_TOKEN=${HF_TOKEN}
+                - HF_API_KEY=${HF_API_KEY}
         runtime: nvidia
         env_file:
-            - ./.env
+            - ../.env
         environment:
             MODEL_ID: mistralai/Mistral-7B-Instruct-v0.3
             SBX_ID: 4
