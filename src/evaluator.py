@@ -158,46 +158,22 @@ class RewardEvaluator(BasicEvaluator):
         
         return 1.0 if max(err_b, err_l, err_v) <= settings.THETA_C else 0.0
         
-    def coherence_eval(self, submission_data: dict) -> float:
-        """'How': Evaluates if the pseudocode faithfully implements the reasoning_steps."""
-        model_submission = submission_data.get('submit', {})
-        reasoning_steps = model_submission.get('reasoning_steps')
-        pseudocode = model_submission.get('pseudocode')
-
-        # 만약 reasoning_steps나 pseudocode가 없다면 일관성을 평가할 수 없음
-        if not reasoning_steps or not pseudocode:
-            return 0.0
-
-        user_prompt = f"""
-### Model's Reasoning Steps
-{reasoning_steps}
-
-### Model's Submitted Pseudocode
-{pseudocode}
-"""
-        
-        response_text = model_caller.call_anthropic_api(
-            model_id=settings.EVAL_MODELS, # Judge LLM
-            system_prompt=prompts.EVALUATOR_COHERENCE_PROMPT,
-            user_prompt=user_prompt,
-            temperature=0.0
-        )
-        try:
-            response_json = json.loads(response_text)
-            return 1.0 if response_json.get('coherence') else 0.0
-        except:
-            print(f"Warning: Coherence Judge LLM response not parsable. Raw response: {response_text}...")
-            return 0.0
-        
-    def reasoning_process_goal_eval(self, model_name:str, submission_data: dict) -> float:
+    def rpg_and_coherence_eval(self, model_name:str, submission_data: dict) -> float:
         """
-        'Why': Calls the Judge LLM to evaluate the alignment of the reasoning process.
-        The Judge is provided with the full context including the problem, reference answer, and the model's submission.
+        'Why' & 'How': Calls the Judge LLM once to evaluate both the goal alignment
+        of the reasoning process and the coherence between reasoning and pseudocode.
+        RPG == reasoning_process_goal
         """
         # 1. Extract all information necessary for evaluation from the submission_data object.
         question_info = submission_data.get('question_info', {})
         answer_info = submission_data.get('answer', {})
         model_submission = submission_data.get('submit', {})
+        
+        reasoning_steps = model_submission.get('pred_reasoning_steps')
+        pseudocode = model_submission.get('pred_pseudocode')
+        
+        if not reasoning_steps or not pseudocode:
+            return False, False
         
         # 2. Creating user_prompt for eval LLM
         system_prompt = prompts.EVALUATOR_BD_PROMPT.format(model_name=model_name, question_num=question_info.get('question_num'))
@@ -208,10 +184,15 @@ Category: {question_info.get('Category')}
 Question: {question_info.get('question')}
 Reference Answer: {answer_info.get('answer')}
 
-### Model's Submitted Reasoning
-{model_submission.get('pred_answer')}
-        """
-        
+### Model's Submitted
+- Answer: {model_submission.get('pred_answer')}
+
+- Reasoning Steps:
+{reasoning_steps}
+
+- Pseudocode:
+{pseudocode}
+"""        
         # 3. Evla LLM invocation and result processing
         response_text = model_caller.call_anthropic_api(
             model_id=settings.EVAL_MODELS,
@@ -221,11 +202,13 @@ Reference Answer: {answer_info.get('answer')}
         )
         try:
             response_json = json.loads(response_text)
-            return 1.0 if response_json.get('question', {}).get('rpg') else 0.0
+            question_results = response_json.get('question', {})
+            coherence = question_results.get('coherence', False)
+            rpg = question_results.get('rpg', False)
+            return coherence, rpg
         except:
-            print(f"Warning: Judge LLM response not parsable for QID {question_info.get('QID')}. Raw response: {response_text[:200]}...")
-            return 0.0
-
+            print(f"Warning: Judge LLM response not parsable for QID {question_info.get('QID')}. Raw response: {response_text}...")
+            return False, False
 
     def whw_condition_eval(self, whw_description: dict) -> tuple[bool, dict]:
         """Evaluates whether the WHW (Why/How/Which) explanation rules are met."""
@@ -299,16 +282,16 @@ Reference Answer: {answer_info.get('answer')}
         whw_met, whw_counts = self.whw_condition_eval(
             whw_description=submit_info.get('whw_description', {})
         )
-        goal_alignment = self.reasoning_process_goal_eval(
-             model_name=submission_data.get('config', {}).get('model_name', 'unknown_model'), # Get model_name from submission_data's config
-             submission_data=submission_data
+        coherence, goal_alignment = self.evaluate_reasoning_and_coherence(
+            model_name=config.get('model_name', 'unknown_model'),
+            submission_data=submission_data
         )
 
         return {
             "correctness_score": correctness,
             "complexity_score": complexity,
-			"coherence_score": coherence,
-            "goal_alignment": goal_alignment == 1.0,
+			"coherence_score": 1.0 if coherence else 0.0,
+            "goal_alignment": goal_alignment,
             "count_whw": whw_counts,
             "whw_condition": whw_met
         }

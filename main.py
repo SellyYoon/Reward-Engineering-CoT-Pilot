@@ -22,9 +22,11 @@ from src import dataset_loader, trial_runner, session_manager
 from src.logger import MainLogger, TrialLogger
 from src import utils, trial_runner
 
-
+# 
 # 1. Container Global Logger
-container_name = os.getenv("CONTAINER_NAME", "unknown_container")
+sbx_id = os.getenv('SBX_ID', 'unknown')
+model_id = os.getenv('MODEL_ID', 'unknown').replace("/", "_")
+container_name = f"{sbx_id}_{model_id}"
 log_file_path = settings.LOG_DIR / f"app_{container_name}_{datetime.utcnow().strftime('%Y%m%d')}.log"
 
 logging.basicConfig(
@@ -44,24 +46,27 @@ def handle_exception(exc_type, exc_value, exc_traceback):
 
 sys.excepthook = handle_exception
 
-class StreamToLogger:
-    def __init__(self, logger, level):
-        self.logger = logger
-        self.level = level
-        self.linebuf = ''
+# class StreamToLogger:
+#     def __init__(self, logger, level):
+#         self.logger = logger
+#         self.level = level
+#         self.linebuf = ''
 
-    def write(self, buf):
-        for line in buf.rstrip().splitlines():
-            self.logger.log(self.level, line.rstrip())
+#     def write(self, buf):
+#         for line in buf.rstrip().splitlines():
+#             if '##########' in line or '%' in line:
+#                 self.logger.log(logging.INFO, line.rstrip())
+#             else:
+#                 self.logger.log(self.level, line.rstrip())
 
-    def flush(self):
-        pass
+#     def flush(self):
+#         pass
 
-# Redirect stdout and stderr output to a logger
-sys.stdout = StreamToLogger(logging.getLogger('STDOUT'), logging.INFO)
-sys.stderr = StreamToLogger(logging.getLogger('STDERR'), logging.ERROR)
+# # Redirect stdout and stderr output to a logger
+# sys.stdout = StreamToLogger(logging.getLogger('STDOUT'), logging.INFO)
+# sys.stderr = StreamToLogger(logging.getLogger('STDERR'), logging.ERROR)
 
-logging.info("--- Global logger initialized ---")
+logging.info(f"--- Global logger initialized for container: {container_name} ---")
 
 
 def main():
@@ -74,7 +79,8 @@ def main():
     print(f"{sbx_id}, {model_id}") 
 
     current_state = session_manager.load_state(sbx_id)
-    trial = current_state.get("current_trial", 0) + 1 
+    # trial = current_state.get("current_trial", 0) + 1 
+    trial = 5
 
     MainLogger.log_process_start(sbx_id=sbx_id)
     total_start_time = time.time()
@@ -140,16 +146,16 @@ def main():
 
         # Update the state file to mark this trial as successfully completed.
         session_manager.save_state(sbx_id, {"current_trial": trial_num})
-        if not container_name:
-            MainLogger._log("The environment variable cannot be found. Please check the docker-compose.yml file.", {"CONTAINER_NAME": container_name})
-            return
         
-        utils.backup(
-            session_id=config['session_id'],
-            model_id=config['model_id'],
-            container_name=container_name
-        )
-        utils.clear_caches()
+        # if not container_name:
+        #     MainLogger._log("The environment variable cannot be found. Please check the docker-compose.yml file.", {"CONTAINER_NAME": container_name})
+        #     return
+        
+        # utils.backup_docker_log(
+        #     session_id=config['session_id'],
+        #     model_id=config['model_id'],
+        #     container_name=container_name
+        # )
         
     # --- Step 3: Finalization ---
     total_end_time = time.time()

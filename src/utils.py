@@ -54,60 +54,85 @@ def get_utc_timestamp() -> str:
     """Returns the current timestamp in UTC ISO 8601 format."""
     return datetime.now(timezone.utc).isoformat()
 
+def extract_fields_manually(response_text: str) -> dict:
+    """
+    A fallback function that extracts key fields using regex when full JSON parsing fails.
+    This is the last resort to salvage data from a badly malformed response.
+    """
+    output = {}
+    
+    # Try to extract pred_answer from various possible patterns
+    patterns = [
+        r'["\']pred_answer["\']\s*:\s*["\'](.*?)["\']',
+        r'Pred_answer:\s*(.*)',
+        r'Answer:\s*(.*)'
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, response_text, re.DOTALL | re.IGNORECASE)
+        if match:
+            output["pred_answer"] = match.group(1).strip()
+            break
+
+    # Extract pseudocode
+    pseudo_match = re.search(r'["\']pred_pseudocode["\']\s*:\s*["\'](.*?)["\']', response_text, re.DOTALL)
+    if pseudo_match:
+        output["pred_pseudocode"] = pseudo_match.group(1).strip().replace('\n', '\\n')
+
+    # Extract numerical counts
+    for key in ["loop_count", "branch_count", "variable_count"]:
+        match = re.search(r'["\']?' + key + r'["\']?\s*:\s*(\d+)', response_text)
+        if match:
+            output[key] = int(match.group(1))
+
+    # If pred_answer is still missing, mark it as an extraction failure.
+    if "pred_answer" not in output:
+        output["error"] = "Failed to parse JSON and could not extract fields manually."
+        output["pred_answer"] = f"Extraction failed. Raw response: {response_text[:150]}..."
+        
+    return output
+
 def parse_model_json_output(response_text: str) -> dict:
     """
-    Safely parses a JSON object from a model's raw text output.
-    It handles Markdown code blocks and extracts the pure JSON.
-    Also processes keys to remove leading/trailing spaces.
+    Safely parses a JSON object from a model's raw text output by attempting a series of cleaning steps.
     """
+    
+    # Step 1: Isolate the most likely JSON string
     json_str = response_text
-
-    # 1. Attempt to extract content from Markdown code blocks first
     match = re.search(r"```json\s*(\{.*?\})\s*```", response_text, re.DOTALL)
     if match:
-        json_str = match.group(1).strip()
+        json_str = match.group(1)
     else:
-        # If no markdown block, try to find the first and last curly braces
-        final_start_index = json_str.find('{')
-        final_end_index = json_str.rfind('}') + 1
-
-        if final_start_index != -1 and final_end_index != 0 and final_end_index > final_start_index:
-            json_str = json_str[final_start_index:final_end_index].strip()
+        start = response_text.find('{')
+        end = response_text.rfind('}')
+        if start != -1 and end != -1 and end > start:
+            json_str = response_text[start:end+1]
         else:
-            # If still no clear JSON, return an error.
-            error_message = f"Model output did not contain a valid JSON object or markdown block. Raw response start: {response_text}..."
-            print(f"Warning: {error_message}")
-            return {"pred_answer": error_message, "error": error_message}
+            # If no JSON structure is found at all, go straight to manual extraction
+            return extract_fields_manually(response_text)
 
-    # 2. Handling line breaks within key-value pairs
-    def fix_newlines(match):
-        key = match.group(1)
-        value = match.group(2)
-        fixed_value = value.replace('\n', '\\n').replace('"', '\\"')
-        return f'"{key}": "{fixed_value}"'
+    # Step 2: Clean up common structural errors within the JSON string
     
-    json_str = re.sub(r'"(pred_pseudocode|why|how|which)":\s*"(.*?)"', fix_newlines, json_str, flags=re.DOTALL)
+    # Remove trailing commas from the end of lists or objects
+    json_str = re.sub(r',\s*([\}\]])', r'\1', json_str)
+    
+    # Replace malformed values like dictionaries in 'pred_variable_count' with a placeholder number
+    json_str = re.sub(r'(["\']pred_variable_count["\']\s*:\s*)\{.*?\}', r'\1 1', json_str, flags=re.DOTALL)
 
-
+    # Fix unescaped newlines inside specific string values
+    def fix_newlines(m):
+        return f'"{m.group(1)}": "{m.group(2).replace(chr(10), chr(92)+"n").replace(chr(34), chr(92)+chr(34))}"'
+    json_str = re.sub(r'"(pred_pseudocode|pred_reasoning_steps|why|how|which)"\s*:\s*"(.*?)"', fix_newlines, json_str, flags=re.DOTALL)
+    
+    # Step 3: Try to parse the cleaned JSON
     try:
-        raw_data = json.loads(json_str)
-
-        # Process keys to remove leading/trailing spaces
-        cleaned_data = {}
-        for k, v in raw_data.items():
-            cleaned_data[k.strip()] = v
-
-        return cleaned_data
-
+        data = json.loads(json_str)
+        # Clean up keys by stripping whitespace
+        return {k.strip(): v for k, v in data.items()}
     except json.JSONDecodeError as e:
-        error_message = f"JSON parsing failed after extraction. Raw extracted JSON: {json_str}... Error: {e}"
-        print(f"Error: {error_message}")
-        return {"pred_answer": error_message, "error": error_message}
-    except Exception as e:
-        error_message = f"Unexpected error parsing model output: {e}. Raw response start: {response_text}..."
-        print(f"Error: {error_message}")
-        return {"pred_answer": error_message, "error": error_message}
-    
+        # Step 4: If parsing still fails, fall back to manual regex extraction
+        print(f"Warning: JSON parsing failed after cleaning: {e}. Falling back to manual extraction.")
+        return extract_fields_manually(response_text)
+        
 def log_raw_response(context: Dict[str, Any], response_text: str, config: int):
     """
     Safely record the original response of the model to a file before parsing it.
@@ -134,18 +159,18 @@ def log_raw_response(context: Dict[str, Any], response_text: str, config: int):
     except Exception as e:
         print(f"CRITICAL WARNING: Failed to write raw response to log file: {e}")
     
-def backup(session_id: str, model_id: str, container_name: str):
+def backup(session_id: str, model_id: str):
     """
     Finds all logs for a given session and moves them to a backup directory.
     """
-    log_dir = settings.LOG_DIR
-    backup_dir = os.path.join(settings.BACKUP_DIR, session_id)
+    log_dir = Path(settings.LOG_DIR)
+    backup_dir = Path(settings.BACKUP_DIR) / str(session_id)
     os.makedirs(backup_dir, exist_ok=True)
     
     # Sanitize model name for matching
-    safe_model_name = model_id.replace("/", "_")
+    model_id = model_id.replace("/", "_")
     
-    prefix = f"{session_id}_{safe_model_name}"
+    prefix = f"{session_id}_{model_id}"
     logger.info(f"Starting application log backup for prefix: {prefix}")
     for filename in os.listdir(log_dir):
         if filename.startswith(prefix):
@@ -154,8 +179,12 @@ def backup(session_id: str, model_id: str, container_name: str):
             except FileNotFoundError:
                 logger.warning(f"Could not find file during move operation: {filename}")
     logger.info(f"Application logs backed up to: {backup_dir}")
+
+# --- Docker Container Log Backup ---
+def backup_docker_log(container_name: str):
     
-    # --- 2. Docker Container Log Backup (New Logic) ---
+    backup_dir = Path(settings.BACKUP_DIR) / str(container_name)
+    os.makedirs(backup_dir, exist_ok=True)
     logger.info(f"Attempting to back up Docker container logs for: {container_name}")
     script_path = "./src/backup_docker_logs.sh"
 
@@ -187,7 +216,7 @@ def backup(session_id: str, model_id: str, container_name: str):
         logger.error(f"STDERR: {e.stderr.strip()}")
     except Exception as e:
         logger.error(f"An unexpected error occurred during Docker log backup: {e}")
-        
+            
 def clear_caches():
     """
     Clears Python-level LRU caches and GPU caches.
