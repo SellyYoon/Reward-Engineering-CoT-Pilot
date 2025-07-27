@@ -3,7 +3,7 @@
 # version: '3.8'
 services:
     sbx1:
-        container_name: sbx1_o4mini
+        container_name: sbx1_gpt-4.1-2025-04-14
         build:
             context: .
             args:
@@ -12,8 +12,9 @@ services:
         env_file:
             - ../.env
         environment:
-            MODEL_ID: gpt-4o-mini-2024-07-18
+            MODEL_ID: gpt-4.1-2025-04-14
             SBX_ID: 1
+            CONTAINER_NAME: ${SBX_ID}_${MODEL_ID}
             HF_HOME: ${HF_CACHE_PATH}/huggingface
         volumes:
             - '/mnt/c/Work/CoT:/app'
@@ -22,7 +23,7 @@ services:
         working_dir: /app
         command: conda run -n pilot python main.py
     sbx2:
-        container_name: sbx2_claude4
+        container_name: 2_claude-sonnet-4-20250514
         build:
             context: .
             args:
@@ -33,6 +34,7 @@ services:
         environment:
             MODEL_ID: claude-sonnet-4-20250514
             SBX_ID: 2
+            CONTAINER_NAME: ${SBX_ID}_${MODEL_ID}
             HF_HOME: ${HF_CACHE_PATH}/huggingface
         volumes:
             - '/mnt/c/Work/CoT:/app'
@@ -41,7 +43,7 @@ services:
         working_dir: /app
         command: conda run -n pilot python main.py
     sbx3:
-        container_name: sbx3_llama3
+        container_name: 3_meta-llama/Llama-3.1-8B-Instruct
         build:
             context: .
             args:
@@ -52,6 +54,7 @@ services:
         environment:
             MODEL_ID: meta-llama/Llama-3.1-8B-Instruct
             SBX_ID: 3
+            CONTAINER_NAME: ${SBX_ID}_${MODEL_ID}
             HF_HOME: ${HF_CACHE_PATH}/huggingface
         volumes:
             - '/mnt/c/Work/CoT:/app'
@@ -60,7 +63,7 @@ services:
         working_dir: /app
         command: conda run -n pilot python main.py
     sbx4:
-        container_name: sbx4_mistral7b
+        container_name: 4_mistralai/Mistral-7B-Instruct-v0.3
         build:
             context: .
             args:
@@ -71,6 +74,7 @@ services:
         environment:
             MODEL_ID: mistralai/Mistral-7B-Instruct-v0.3
             SBX_ID: 4
+            CONTAINER_NAME: ${SBX_ID}_${MODEL_ID}
             HF_HOME: ${HF_CACHE_PATH}/huggingface
         volumes:
             - '/mnt/c/Work/CoT:/app'

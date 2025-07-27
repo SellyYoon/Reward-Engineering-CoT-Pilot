@@ -24,7 +24,7 @@ class MainLogger:
             f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
 
     @staticmethod
-    def log_process_start(sbx_id: int, start_trial: int):
+    def log_process_start(sbx_id: int):
         MainLogger._log("PROCESS_START", {"sbx_id": sbx_id})
 
     @staticmethod
@@ -47,9 +47,10 @@ class TrialLogger:
     def _get_log_path(self, role: str) -> str:
         """Generates a log file path based on the user-defined convention."""
         session_id = self.config['session_id']
+        sbx_id = self.config['sbx_id']
         model_id = self.config.get('model_id', 'unknown').replace("/", "_") # Sanitize name
         if role == 'events':
-            filename = f"{model_id}_{role}.jsonl"
+            filename = f"{sbx_id}_{model_id}_{role}.jsonl"
         else:
             filename = f"{session_id}_{model_id}_{role}.jsonl"
         return os.path.join(self.log_dir, filename)

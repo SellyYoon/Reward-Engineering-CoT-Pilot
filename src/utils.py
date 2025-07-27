@@ -6,6 +6,7 @@ import re
 import time
 import os
 import shutil
+import subprocess
 import logging
 import sys
 import torch
@@ -133,7 +134,7 @@ def log_raw_response(context: Dict[str, Any], response_text: str, config: int):
     except Exception as e:
         print(f"CRITICAL WARNING: Failed to write raw response to log file: {e}")
     
-def backup(session_id: str, model_id: str):
+def backup(session_id: str, model_id: str, container_name: str):
     """
     Finds all logs for a given session and moves them to a backup directory.
     """
@@ -145,12 +146,48 @@ def backup(session_id: str, model_id: str):
     safe_model_name = model_id.replace("/", "_")
     
     prefix = f"{session_id}_{safe_model_name}"
-    
+    logger.info(f"Starting application log backup for prefix: {prefix}")
     for filename in os.listdir(log_dir):
         if filename.startswith(prefix):
-            shutil.move(os.path.join(log_dir, filename), os.path.join(backup_dir, filename))
-    logger.info(f"Logs for session {session_id} have been backed up to {backup_dir}")
+            try:
+                shutil.move(str(log_dir / filename), str(backup_dir / filename))
+            except FileNotFoundError:
+                logger.warning(f"Could not find file during move operation: {filename}")
+    logger.info(f"Application logs backed up to: {backup_dir}")
+    
+    # --- 2. Docker Container Log Backup (New Logic) ---
+    logger.info(f"Attempting to back up Docker container logs for: {container_name}")
+    script_path = "./src/backup_docker_logs.sh" # Assumes script is in the project root.
 
+    # Check if the backup script exists before trying to run it.
+    if not os.path.exists(script_path):
+        logger.error(f"Docker log backup script not found at: {script_path}")
+        return
+
+    try:
+        # Execute the shell script using subprocess.run
+        result = subprocess.run(
+            [script_path, container_name, str(backup_dir)],
+            capture_output=True, # Capture the script's stdout and stderr
+            text=True,           # Decode output as text
+            check=True           # Raise an exception if the script returns a non-zero exit code
+        )
+        # Log the output from the script for better debugging
+        if result.stdout:
+            logger.info(f"[Docker Backup Script]:\n{result.stdout.strip()}")
+        if result.stderr:
+            logger.warning(f"[Docker Backup Script ERROR]:\n{result.stderr.strip()}")
+
+    except FileNotFoundError:
+        logger.error(f"Script '{script_path}' not found. Ensure it has execute permissions (chmod +x).")
+    except subprocess.CalledProcessError as e:
+        # This block runs if the script fails (returns a non-zero exit code)
+        logger.error(f"Docker log backup script failed with exit code {e.returncode}:")
+        logger.error(f"STDOUT: {e.stdout.strip()}")
+        logger.error(f"STDERR: {e.stderr.strip()}")
+    except Exception as e:
+        logger.error(f"An unexpected error occurred during Docker log backup: {e}")
+        
 def clear_caches():
     """
     Clears Python-level LRU caches and GPU caches.

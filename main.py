@@ -4,6 +4,9 @@
 
 import os
 import time
+import logging
+import sys
+from datetime import datetime
 
 print("--- INSPECTING src/model_caller.py FROM INSIDE THE CONTAINER ---")
 try:
@@ -17,6 +20,49 @@ from configs import settings
 from src import model_caller
 from src import dataset_loader, trial_runner, session_manager
 from src.logger import MainLogger, TrialLogger
+from src import utils, trial_runner
+
+
+# 1. Container Global Logger
+container_name = os.getenv("CONTAINER_NAME", "unknown_container")
+log_file_path = settings.LOG_DIR / f"app_{container_name}_{datetime.utcnow().strftime('%Y%m%d')}.log"
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler(log_file_path, mode='a', encoding='utf-8'),
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+
+def handle_exception(exc_type, exc_value, exc_traceback):
+    if issubclass(exc_type, KeyboardInterrupt):
+        sys.__excepthook__(exc_type, exc_value, exc_traceback)
+        return
+    logging.error("Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback))
+
+sys.excepthook = handle_exception
+
+class StreamToLogger:
+    def __init__(self, logger, level):
+        self.logger = logger
+        self.level = level
+        self.linebuf = ''
+
+    def write(self, buf):
+        for line in buf.rstrip().splitlines():
+            self.logger.log(self.level, line.rstrip())
+
+    def flush(self):
+        pass
+
+# Redirect stdout and stderr output to a logger
+sys.stdout = StreamToLogger(logging.getLogger('STDOUT'), logging.INFO)
+sys.stderr = StreamToLogger(logging.getLogger('STDERR'), logging.ERROR)
+
+logging.info("--- Global logger initialized ---")
+
 
 def main():
     """Main function to start and orchestrate the entire experiment."""
@@ -30,7 +76,7 @@ def main():
     current_state = session_manager.load_state(sbx_id)
     trial = current_state.get("current_trial", 0) + 1 
 
-    MainLogger.log_process_start(sbx_id=sbx_id, start_trial=trial)
+    MainLogger.log_process_start(sbx_id=sbx_id)
     total_start_time = time.time()
     
     # Load the master dataset once for the entire run.
@@ -94,6 +140,16 @@ def main():
 
         # Update the state file to mark this trial as successfully completed.
         session_manager.save_state(sbx_id, {"current_trial": trial_num})
+        if not container_name:
+            MainLogger._log("The environment variable cannot be found. Please check the docker-compose.yml file.", {"CONTAINER_NAME": container_name})
+            return
+        
+        utils.backup(
+            session_id=config['session_id'],
+            model_id=config['model_id'],
+            container_name=container_name
+        )
+        utils.clear_caches()
         
     # --- Step 3: Finalization ---
     total_end_time = time.time()

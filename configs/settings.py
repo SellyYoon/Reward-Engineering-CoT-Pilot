@@ -15,10 +15,10 @@ HF_API_KEY = os.getenv("HF_API_KEY")
 
 # Model configuration
 APPLICANT_MODELS = [
-    {"sbx_id": 1, "name": "o4-mini", "model_id": "gpt-4o-mini-2024-07-18", "type": "api_openai"},
-    {"sbx_id": 2, "name": "claude-sonnet", "model_id": "claude-sonnet-4-20250514", "type": "api_anthropic"},
-    {"sbx_id": 3, "name": "llama3-8b", "model_id": "meta-llama/Llama-3.1-8B-Instruct", "type": "local"},
-    {"sbx_id": 4, "name": "mistral-7b", "model_id": "mistralai/Mistral-7B-Instruct-v0.3", "type": "local"},
+    {"sbx_id": 1, "name": "gpt-4.1", "model_id": "gpt-4.1-2025-04-14", "type": "api_openai"},
+    {"sbx_id": 2, "name": "claude-sonnet-4", "model_id": "claude-sonnet-4-20250514", "type": "api_anthropic"},
+    {"sbx_id": 3, "name": "gemini-2.5-pro", "model_id": "gemini-2.5-pro", "type": "api_google"},
+    {"sbx_id": 4, "name": "llama3-8b", "model_id": "meta-llama/Llama-3.1-8B-Instruct", "type": "local"},
 ]
 
 EVAL_MODELS = "claude-opus-4-20250514"
