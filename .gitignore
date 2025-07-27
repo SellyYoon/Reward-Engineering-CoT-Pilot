@@ -1,17 +1,15 @@
 # Ignore generated experiment directories
 logs/
 backups/
-datasets/
+datasets/*problem_set
 results/
 *.log
 *.db
 *.zip
 
 # Ignore sensitive environment files
-*.env
 Tools.md
 Workflow.md
-.env
 
 # Optional: ignore Python cache and virtual environments
 __pycache__/
