@@ -25,7 +25,7 @@ class MainLogger:
 
     @staticmethod
     def log_process_start(sbx_id: int, start_trial: int):
-        MainLogger._log("PROCESS_START", {"sbx_id": sbx_id, "start_trial": start_trial})
+        MainLogger._log("PROCESS_START", {"sbx_id": sbx_id})
 
     @staticmethod
     def log_process_finish(sbx_id: int, total_time: str):

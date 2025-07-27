@@ -105,6 +105,7 @@ def run_solver_turn(
     return submission_log_entry
 
 def evaluate_reward_turn(
+    config: dict,
     condition: str,
     submission_data: dict
 ) -> Tuple[dict, float]:
@@ -115,7 +116,7 @@ def evaluate_reward_turn(
     evaluator_instance = EVALUATOR_MAP[condition]
     
     # 1. Perform all necessary evaluations to get the 'eval' dictionary
-    evaluation_results = evaluator_instance.evaluate(submission_data)
+    evaluation_results = evaluator_instance.evaluate(config, submission_data)
 
     # 2. Get the reward components dictionary for the 'reward' field
     reward_components_for_log = reward_system.calculate_reward(

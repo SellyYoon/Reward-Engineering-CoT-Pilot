@@ -2,16 +2,26 @@
 # A collection of utility functions for the experiment.
 
 import json
-from pathlib import Path
 import re
 import time
 import os
 import shutil
+import logging
+import sys
+import torch
+from pathlib import Path
 from datetime import datetime, timezone
 from functools import wraps
 from typing import Any, Dict
-import torch
 from configs import settings, prompts
+
+# --- logger initalization ---
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    stream=sys.stdout
+)
+logger = logging.getLogger(__name__)
 
 # --- Decorator for Retry Logic ---
 
@@ -68,6 +78,16 @@ def parse_model_json_output(response_text: str) -> dict:
             print(f"Warning: {error_message}")
             return {"pred_answer": error_message, "error": error_message}
 
+    # 2. Handling line breaks within key-value pairs
+    def fix_newlines(match):
+        key = match.group(1)
+        value = match.group(2)
+        fixed_value = value.replace('\n', '\\n').replace('"', '\\"')
+        return f'"{key}": "{fixed_value}"'
+    
+    json_str = re.sub(r'"(pred_pseudocode|why|how|which)":\s*"(.*?)"', fix_newlines, json_str, flags=re.DOTALL)
+
+
     try:
         raw_data = json.loads(json_str)
 
@@ -91,8 +111,16 @@ def log_raw_response(context: Dict[str, Any], response_text: str, config: int):
     """
     Safely record the original response of the model to a file before parsing it.
     """
-    log_path = settings.BACKUP_DIR / Path(config['model_id']).name.replace("/", "_") / f"{config['session_id']}_responses.jsonl"
-    
+    model_id = config['model_id'].replace("/", "_")
+    log_dir = settings.BACKUP_DIR / model_id
+
+    try:
+        os.makedirs(log_dir, exist_ok=True)
+    except OSError as e:
+        print(f"CRITICAL WARNING: Failed to create log directory {log_dir}: {e}")
+        return
+
+    log_path = log_dir / f"{config['session_id']}_responses.jsonl"    
     log_entry = {
         "qid": context.get("QID"),
         "context": context,
@@ -121,7 +149,7 @@ def backup(session_id: str, model_id: str):
     for filename in os.listdir(log_dir):
         if filename.startswith(prefix):
             shutil.move(os.path.join(log_dir, filename), os.path.join(backup_dir, filename))
-    print(f"Logs for session {session_id} have been backed up to {backup_dir}")
+    logger(f"Logs for session {session_id} have been backed up to {backup_dir}")
 
 def clear_caches():
     """
@@ -132,32 +160,32 @@ def clear_caches():
     try:
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
-            print("PyTorch GPU cache cleared.")
+            logger("PyTorch GPU cache cleared.")
     except Exception as e:
-        print(f"Could not clear GPU cache: {e}")
+        logger(f"Could not clear GPU cache: {e}")
 
     # 2. LRU Cache Clearing (Informational)
     from src import model_caller
     model_caller.load_local_model.cache_clear()
-    print("LRU caches should be cleared directly on the decorated functions in the main script.")
+    logger("LRU caches should be cleared directly on the decorated functions in the main script.")
 
 def check_environment():
     """
     Performs a basic check for necessary environment variables and hardware.
     """
-    print("--- Performing Environment Check ---")
+    logger("--- Performing Environment Check ---")
     # Check for API keys
     if not (settings.OPENAI_API_KEY and settings.ANTHROPIC_API_KEY):
-        print("Warning: One or more API keys are missing from the .env file.")
+        logger("Warning: One or more API keys are missing from the .env file.")
     else:
-        print("API keys found.")
+        logger("API keys found.")
         
     # Check for GPU
     if torch.cuda.is_available():
-        print(f"GPU found: {torch.cuda.get_device_name(0)}")
+        logger(f"GPU found: {torch.cuda.get_device_name(0)}")
     else:
-        print("Warning: No GPU found. Local model inference will be very slow.")
-    print("--- Environment Check Complete ---")
+        logger("Warning: No GPU found. Local model inference will be very slow.")
+    logger("--- Environment Check Complete ---")
     
 def applicant_system_prompt(condition: str):
 	if condition in ("A", "C"):

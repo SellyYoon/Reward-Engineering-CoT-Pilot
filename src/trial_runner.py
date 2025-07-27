@@ -71,6 +71,7 @@ def run_realtime_trial(config: Dict[str, Any], dataset: List[Dict[str, Any]], tr
         trial_logger.log_submit(submission)
                 
         final_log, _ = turn_manager.evaluate_reward_turn(
+            config=config,
             condition=config['condition'],
             submission_data=submission
         )
