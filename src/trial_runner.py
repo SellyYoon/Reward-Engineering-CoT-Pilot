@@ -30,7 +30,11 @@ def run_batch_trial(config: Dict[str, Any], dataset: List[Dict[str, Any]], trial
 
     final_logs = []
     for sub_data in submissions:
-        final_log, _ = turn_manager.evaluate_reward_turn(config['condition'], sub_data)
+        final_log, _ = turn_manager.evaluate_reward_turn(
+            config=config, 
+            condition=config['condition'], 
+            submission_data=sub_data
+        )
         final_logs.append(final_log)
         trial_logger.log_eval(final_log)
         

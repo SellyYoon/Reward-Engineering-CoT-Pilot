@@ -149,7 +149,7 @@ def backup(session_id: str, model_id: str):
     for filename in os.listdir(log_dir):
         if filename.startswith(prefix):
             shutil.move(os.path.join(log_dir, filename), os.path.join(backup_dir, filename))
-    logger(f"Logs for session {session_id} have been backed up to {backup_dir}")
+    logger.info(f"Logs for session {session_id} have been backed up to {backup_dir}")
 
 def clear_caches():
     """
@@ -160,14 +160,14 @@ def clear_caches():
     try:
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
-            logger("PyTorch GPU cache cleared.")
+            logger.info("PyTorch GPU cache cleared.")
     except Exception as e:
-        logger(f"Could not clear GPU cache: {e}")
+        logger.error(f"Could not clear GPU cache: {e}")
 
     # 2. LRU Cache Clearing (Informational)
     from src import model_caller
     model_caller.load_local_model.cache_clear()
-    logger("LRU caches should be cleared directly on the decorated functions in the main script.")
+    logger.info("LRU caches should be cleared directly on the decorated functions in the main script.")
 
 def check_environment():
     """
@@ -176,16 +176,16 @@ def check_environment():
     logger("--- Performing Environment Check ---")
     # Check for API keys
     if not (settings.OPENAI_API_KEY and settings.ANTHROPIC_API_KEY):
-        logger("Warning: One or more API keys are missing from the .env file.")
+        logger.warning("Warning: One or more API keys are missing from the .env file.")
     else:
-        logger("API keys found.")
+        logger.info("API keys found.")
         
     # Check for GPU
     if torch.cuda.is_available():
-        logger(f"GPU found: {torch.cuda.get_device_name(0)}")
+        logger.info(f"GPU found: {torch.cuda.get_device_name(0)}")
     else:
-        logger("Warning: No GPU found. Local model inference will be very slow.")
-    logger("--- Environment Check Complete ---")
+        logger.warning("Warning: No GPU found. Local model inference will be very slow.")
+    logger.info("--- Environment Check Complete ---")
     
 def applicant_system_prompt(condition: str):
 	if condition in ("A", "C"):

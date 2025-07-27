@@ -110,7 +110,7 @@ class BasicEvaluator:
 			ref_str = ref_answer[0] if isinstance(ref_answer, list) else ref_answer
 			return 1.0 if pred_answer_str.lower() == str(ref_str).strip().lower() else 0.0
 
-	def evaluate(self, submission_data: dict) -> dict:
+	def evaluate(self, config: dict, submission_data: dict) -> dict:
 		"""
 		For conditions A and C. Evaluates only correctness.
 		Returns a dictionary matching the 'eval' field in the log.
