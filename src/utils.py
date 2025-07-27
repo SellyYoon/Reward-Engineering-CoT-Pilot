@@ -157,7 +157,7 @@ def backup(session_id: str, model_id: str, container_name: str):
     
     # --- 2. Docker Container Log Backup (New Logic) ---
     logger.info(f"Attempting to back up Docker container logs for: {container_name}")
-    script_path = "./src/backup_docker_logs.sh" # Assumes script is in the project root.
+    script_path = "./src/backup_docker_logs.sh"
 
     # Check if the backup script exists before trying to run it.
     if not os.path.exists(script_path):

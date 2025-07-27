@@ -11,6 +11,7 @@ backups/
 # 데이터셋 관련 파일 및 폴더 제외
 datasets/
 master.db
+tester.db
 *.sqlite
 
 # Python 관련 캐시 및 환경 파일 제외

@@ -17,4 +17,3 @@ Workflow.md
 __pycache__/
 *.pyc
 venv/
-*.sh

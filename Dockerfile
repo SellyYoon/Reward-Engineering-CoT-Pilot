@@ -75,3 +75,4 @@ WORKDIR /app
 
 # Copy project files into the container
 COPY . /app
+RUN chmod +x /app/src/backup_docker_logs.sh
