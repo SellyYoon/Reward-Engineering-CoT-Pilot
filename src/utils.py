@@ -91,9 +91,7 @@ def log_raw_response(context: Dict[str, Any], response_text: str, config: int):
     """
     Safely record the original response of the model to a file before parsing it.
     """
-    model_id = config['model_id']
-    session_id = config['session_id']
-    log_path = settings.BACKUP_DIR / {model_id} / f"{session_id}_responses.jsonl"
+    log_path = settings.BACKUP_DIR / Path(config['model_id']).name.replace("/", "_") / f"{config['session_id']}_responses.jsonl"
     
     log_entry = {
         "qid": context.get("QID"),

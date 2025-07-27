@@ -51,9 +51,9 @@ RUN pip install --no-cache-dir --upgrade \
     "torchaudio==2.3.1+cu121" \
     "protobuf" \
     "sentencepiece" \
-    "transformers==4.42.0" \
-    "accelerate==0.31.0" \
-    "bitsandbytes==0.43.1" \
+    "transformers>=4.42.0" \
+    "accelerate>=0.31.0" \
+    "bitsandbytes>=0.43.1" \
     "openai" \
     "anthropic" \
     "datasets==2.20.0" \

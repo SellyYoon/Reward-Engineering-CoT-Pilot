@@ -75,7 +75,7 @@ def call_openai_api(config: dict, temperature: Optional[float], system_prompt: s
         )
         log_context = context or {}
         log_context['model_id'] = model_id
-        utils.log_raw_response(log_context, response)
+        utils.log_raw_response(log_context, response, config)
         return response
     except Exception as e:
         print(f"Error calling OpenAI API for model {model_id}: {e}")
@@ -100,7 +100,7 @@ def call_anthropic_api(config: dict, temperature: Optional[float], system_prompt
         json_response = "{" + response.content[0].text
         log_context = context or {}
         log_context['model_id'] = model_id
-        utils.log_raw_response(log_context, json_response)
+        utils.log_raw_response(log_context, json_response,config)
         return json_response
         
     except Exception as e:
@@ -151,10 +151,9 @@ def call_local_model(model, config: dict, tokenizer, system_prompt: str, user_pr
 
         # Decode and return the response
         response = tokenizer.decode(outputs[0][input_ids.shape[-1]:], skip_special_tokens=True)
-        json_response = response.choices[0].message.content
         log_context = context or {}
         log_context['model_id'] = model_id
-        utils.log_raw_response(log_context, response, model_id, )
+        utils.log_raw_response(log_context, response, config)
         return response
     
     except Exception as e:
