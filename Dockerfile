@@ -61,7 +61,16 @@ RUN pip install --no-cache-dir --upgrade \
     "huggingface_hub==0.24.1" \
     "python-dotenv" \
     "bert-score==0.3.13" \
-    "scikit-learn"
+    "scikit-learn" \
+    "nltk"
+
+RUN python -m nltk.downloader punkt
+
+# RUN mkdir -p /opt/nltk_data && chmod 777 /opt/nltk_data
+# ENV NLTK_DATA=/opt/nltk_data
+# RUN conda run -n pilot python -m nltk.downloader -d ${NLTK_DATA} punkt_tab
+    
+# ENV PYTHONUNBUFFERED=1
 
 # Hugging Face CLI login
 RUN pip install huggingface_hub

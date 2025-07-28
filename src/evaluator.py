@@ -3,12 +3,14 @@
 import json
 import re
 import ast
+import nltk
 from typing import Any
 from bert_score import score as bert_scorer
 from configs import settings, prompts
+import logging
 from src.dataset_loader import get_reference_counts
 from src import model_caller    # Required for calling the Judge LLM
-
+    
 class BasicEvaluator:
 	"""
 	Provides basic scoring functions that can be used across all conditions.
@@ -152,13 +154,13 @@ class RewardEvaluator(BasicEvaluator):
         ref_counts = get_reference_counts(config, question_num)
         
         # Use .get() with default 0 for submission_counts and ref_counts to prevent KeyError
-        err_b = abs(submission_counts.get('branch_count', 0) - ref_counts.get('branch_count', 0)) / max(ref_counts.get('branch_count', 1), 1)
-        err_l = abs(submission_counts.get('loop_count', 0) - ref_counts.get('loop_count', 0)) / max(ref_counts.get('loop_count', 1), 1)
-        err_v = abs(submission_counts.get('variable_count', 0) - ref_counts.get('variable_count', 0)) / max(ref_counts.get('variable_count', 1), 1)
+        err_b = abs(submission_counts.get('pred_branch_count', 0) - ref_counts.get('branch_count', 0)) / max(ref_counts.get('branch_count', 1), 1)
+        err_l = abs(submission_counts.get('pred_loop_count', 0) - ref_counts.get('loop_count', 0)) / max(ref_counts.get('loop_count', 1), 1)
+        err_v = abs(submission_counts.get('pred_variable_count', 0) - ref_counts.get('variable_count', 0)) / max(ref_counts.get('variable_count', 1), 1)
         
         return 1.0 if max(err_b, err_l, err_v) <= settings.THETA_C else 0.0
         
-    def rpg_and_coherence_eval(self, model_name:str, submission_data: dict) -> float:
+    def rpg_and_coherence_eval(self, config:dict, model_name:str, submission_data: dict) -> float:
         """
         'Why' & 'How': Calls the Judge LLM once to evaluate both the goal alignment
         of the reasoning process and the coherence between reasoning and pseudocode.
@@ -172,16 +174,22 @@ class RewardEvaluator(BasicEvaluator):
         reasoning_steps = model_submission.get('pred_reasoning_steps')
         pseudocode = model_submission.get('pred_pseudocode')
         
+        logging.info(f"reasoning_steps:\n{reasoning_steps}\npseudocode:\n{pseudocode}")
         if not reasoning_steps or not pseudocode:
+            logging.warning("reasoning_steps or pseudocode not found.")
             return False, False
         
         # 2. Creating user_prompt for eval LLM
-        system_prompt = prompts.EVALUATOR_BD_PROMPT.format(model_name=model_name, question_num=question_info.get('question_num'))
+        logging.info("Create prompt")
+        logging.info("---- system_prompt ----")
+        system_prompt = prompts.EVALUATOR_BD_PROMPT.format(model_name=model_name)
+        logging.info(system_prompt)
+        logging.info("---- user_prompt ----")
         user_prompt = f"""
 ### Original Question
 Q_Num: {question_info.get('question_num')}
 Category: {question_info.get('Category')}
-Question: {question_info.get('question')}
+Question: {question_info.get('Question')}
 Reference Answer: {answer_info.get('answer')}
 
 ### Model's Submitted
@@ -193,41 +201,49 @@ Reference Answer: {answer_info.get('answer')}
 - Pseudocode:
 {pseudocode}
 """        
-        # 3. Evla LLM invocation and result processing
-        response_text = model_caller.call_anthropic_api(
+        logging.info(user_prompt)
+        
+        # 3. Eval LLM invocation and result processing
+        logging.info("---- Call Eval Model ----")
+        response = model_caller.call_anthropic_api(
+            config=config,
             model_id=settings.EVAL_MODELS,
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             temperature=0.0
         )
+        logging.info(f"response_text: {response}")
+        
         try:
-            response_json = json.loads(response_text)
+            response_json = json.loads(response)
             question_results = response_json.get('question', {})
             coherence = question_results.get('coherence', False)
             rpg = question_results.get('rpg', False)
             return coherence, rpg
         except:
-            print(f"Warning: Judge LLM response not parsable for QID {question_info.get('QID')}. Raw response: {response_text}...")
+            print(f"Warning: Judge LLM response not parsable for QID {question_info.get('QID')}. Raw response: {response}...")
             return False, False
 
     def whw_condition_eval(self, whw_description: dict) -> tuple[bool, dict]:
         """Evaluates whether the WHW (Why/How/Which) explanation rules are met."""
         # Count sentences for each item
         # Ensure whw_description is not None and contains expected keys
+        logging.info(f"whw_description: {whw_description}")
         
         def count_sentences(text: str) -> int:
             """Counts sentences more accurately using regex to split by various delimiters."""
             if not text or not isinstance(text, str):
                 return 0
-            
-            sentences = re.split(r'(?<=[.!?])\s+', text)
-            sentence_count = sum(1 for s in sentences if s.strip())
-            return sentence_count
+            sentences = nltk.sent_tokenize(text)
+            return len(sentences)
+            # sentences = re.split(r'(?<=[.!?])\s+', text)
+            # sentence_count = sum(1 for s in sentences if s.strip())
+            # return sentence_count
         
         counts = {
-            'why': count_sentences(whw_description.get('why', '')),
-            'how': count_sentences(whw_description.get('how', '')),
-            'which': count_sentences(whw_description.get('which', ''))
+            'why': count_sentences(whw_description.get('why') or whw_description.get('Why', '')),
+            'how': count_sentences(whw_description.get('how') or whw_description.get('How', '')),
+            'which': count_sentences(whw_description.get('which') or whw_description.get('Which', ''))
         }
 
         total_sentences = sum(counts.values())
@@ -254,7 +270,6 @@ Reference Answer: {answer_info.get('answer')}
 
         # Ensure 'pred_answer' and 'whw_description' keys exist safely
         pred_answer = submit_info.get('pred_answer', '')
-        whw_description = submit_info.get('whw_description', {})
         
         # If pred_answer is missing or parsing error occurred, assign 0 score
         if not pred_answer and 'error' in submit_info:
@@ -273,19 +288,23 @@ Reference Answer: {answer_info.get('answer')}
             ref_answer=answer_info['answer'],
             category=question_info['category']
         )
+        logging.info(f"correctness: {correctness}")
         complexity = self.complexity_eval(
             config=config,
             question_num=question_info['question_num'],
             submission_counts=submit_info 
         )
-        coherence = self.coherence_eval(submission_data)
+        logging.info(f"complexity: {complexity}")
         whw_met, whw_counts = self.whw_condition_eval(
             whw_description=submit_info.get('whw_description', {})
         )
-        coherence, goal_alignment = self.evaluate_reasoning_and_coherence(
+        logging.info(f"whw_met: {whw_met}, whw_counts: {whw_counts}")
+        coherence, goal_alignment = self.rpg_and_coherence_eval(
+            config=config,
             model_name=config.get('model_name', 'unknown_model'),
             submission_data=submission_data
         )
+        logging.info(f"coherence: {coherence}, goal_alignment: {goal_alignment}")
 
         return {
             "correctness_score": correctness,

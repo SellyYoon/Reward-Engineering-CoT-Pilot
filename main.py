@@ -46,24 +46,24 @@ def handle_exception(exc_type, exc_value, exc_traceback):
 
 sys.excepthook = handle_exception
 
-# class StreamToLogger:
-#     def __init__(self, logger, level):
-#         self.logger = logger
-#         self.level = level
-#         self.linebuf = ''
+class StreamToLogger:
+    def __init__(self, logger, level):
+        self.logger = logger
+        self.level = level
+        self.linebuf = ''
 
-#     def write(self, buf):
-#         for line in buf.rstrip().splitlines():
-#             if '##########' in line or '%' in line:
-#                 self.logger.log(logging.INFO, line.rstrip())
-#             else:
-#                 self.logger.log(self.level, line.rstrip())
+    def write(self, buf):
+        for line in buf.rstrip().splitlines():
+            if '##########' in line or '%' in line:
+                self.logger.log(logging.INFO, line.rstrip())
+            else:
+                self.logger.log(self.level, line.rstrip())
 
-#     def flush(self):
-#         pass
+    def flush(self):
+        sys.__stdout__.flush()
 
-# # Redirect stdout and stderr output to a logger
-# sys.stdout = StreamToLogger(logging.getLogger('STDOUT'), logging.INFO)
+# Redirect stdout and stderr output to a logger
+sys.stdout = StreamToLogger(logging.getLogger('STDOUT'), logging.INFO)
 # sys.stderr = StreamToLogger(logging.getLogger('STDERR'), logging.ERROR)
 
 logging.info(f"--- Global logger initialized for container: {container_name} ---")
@@ -79,8 +79,7 @@ def main():
     print(f"{sbx_id}, {model_id}") 
 
     current_state = session_manager.load_state(sbx_id)
-    # trial = current_state.get("current_trial", 0) + 1 
-    trial = 5
+    trial = current_state.get("current_trial", 0) + 1 
 
     MainLogger.log_process_start(sbx_id=sbx_id)
     total_start_time = time.time()
@@ -114,7 +113,7 @@ def main():
     # --- Step 2: Main Experiment Loop ---
     # The loop iterates through the determined range of trials.
     print(f"[DEBUG] TOTAL_RUNS={settings.TOTAL_RUNS}, start_trial={trial}")
-    print(f"[DEBUG] Entering loop: range({trial}, {settings.TOTAL_RUNS + 1})")
+    print(f"[DEBUG] Entering loop: range({trial}, {settings.TOTAL_RUNS})")
     for trial_num in range(trial, settings.TOTAL_RUNS + 1): 
         
         # Get all configuration for the current trial from the session manager.

@@ -145,8 +145,8 @@ def log_raw_response(context: Dict[str, Any], response_text: str, config: int):
     except OSError as e:
         print(f"CRITICAL WARNING: Failed to create log directory {log_dir}: {e}")
         return
-
-    log_path = log_dir / f"{config['session_id']}_responses.jsonl"    
+    timestamp = datetime.now().strftime('%Y%m%d%H')
+    log_path = log_dir / f"{config['session_id']}_{timestamp}_responses.jsonl"    
     log_entry = {
         "qid": context.get("QID"),
         "context": context,
@@ -164,13 +164,14 @@ def backup(session_id: str, model_id: str):
     Finds all logs for a given session and moves them to a backup directory.
     """
     log_dir = Path(settings.LOG_DIR)
-    backup_dir = Path(settings.BACKUP_DIR) / str(session_id)
+    model_id = model_id.replace("/", "_")
+    backup_dir = Path(settings.BACKUP_DIR) / str(model_id)
     os.makedirs(backup_dir, exist_ok=True)
     
     # Sanitize model name for matching
-    model_id = model_id.replace("/", "_")
     
-    prefix = f"{session_id}_{model_id}"
+    timestamp = datetime.now().strftime('%Y%m%d%H%M')
+    prefix = f"{session_id}_{timestamp}"
     logger.info(f"Starting application log backup for prefix: {prefix}")
     for filename in os.listdir(log_dir):
         if filename.startswith(prefix):

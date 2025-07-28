@@ -20,7 +20,7 @@ services:
             - '/mnt/e/CoT_Result/logs:/logs'
             - '/mnt/e/CoT_Result/backups:/backups'
         working_dir: /app
-        command: conda run -n pilot python main.py
+        command: conda run -n pilot python -u main.py
     sbx2:
         container_name: 2_claude-sonnet-4-20250514
         build:
@@ -39,7 +39,7 @@ services:
             - '/mnt/e/CoT_Result/logs:/logs'
             - '/mnt/e/CoT_Result/backups:/backups'
         working_dir: /app
-        command: conda run -n pilot python main.py
+        command: conda run -n pilot python -u main.py
     sbx3:
         container_name: 3_gemini-2.5-pro
         build:
@@ -58,7 +58,7 @@ services:
             - '/mnt/e/CoT_Result/logs:/logs'
             - '/mnt/e/CoT_Result/backups:/backups'
         working_dir: /app
-        command: conda run -n pilot python main.py
+        command: conda run -n pilot python -u main.py
     # Test Only : Local model
     sbx4:
         container_name: 4_meta-llama_Llama-3.1-8B-Instruct
@@ -78,4 +78,4 @@ services:
             - '/mnt/e/CoT_Result/logs:/logs'
             - '/mnt/e/CoT_Result/backups:/backups'
         working_dir: /app
-        command: conda run -n pilot python main.py
+        command: conda run -n pilot python -u main.py
