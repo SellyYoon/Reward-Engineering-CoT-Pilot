@@ -1,16 +1,21 @@
 # src/evaluator.py
 
+import spacy
 import json
 import re
 import ast
-import nltk
 from typing import Any
 from bert_score import score as bert_scorer
 from configs import settings, prompts
 import logging
 from src.dataset_loader import get_reference_counts
 from src import model_caller    # Required for calling the Judge LLM
+from functools import lru_cache
     
+@lru_cache(maxsize=1)
+def _get_nlp():
+    return spacy.load("en_core_web_sm", disable=["ner", "lemmatizer", "textcat"])
+                      
 class BasicEvaluator:
 	"""
 	Provides basic scoring functions that can be used across all conditions.
@@ -132,8 +137,8 @@ class BasicEvaluator:
 				"correctness_score": 0.0,
 				"complexity_score": 0.0,
 				"goal_alignment": False,
-				"count_whw": {'why': 0, 'how': 0, 'which': 0},
-				"whw_condition": False
+				"whw_count": {'why': 0, 'how': 0, 'which': 0},
+				"whw_description_rule": False
 			}
 
 		correctness = self.correctness_eval(
@@ -200,17 +205,22 @@ Reference Answer: {answer_info.get('answer')}
 
 - Pseudocode:
 {pseudocode}
+
+- Description of the basis for compensation:
+{model_submission.get('whw_description')}
 """        
         logging.info(user_prompt)
         
         # 3. Eval LLM invocation and result processing
+        model_id=settings.EVAL_MODELS
         logging.info("---- Call Eval Model ----")
         response = model_caller.call_anthropic_api(
             config=config,
-            model_id=settings.EVAL_MODELS,
             system_prompt=system_prompt,
             user_prompt=user_prompt,
-            temperature=0.0
+            eval_model_id=model_id['model_id'],
+            temperature=0.0,
+            context=submission_data.get('question_info')
         )
         logging.info(f"response_text: {response}")
         
@@ -231,14 +241,10 @@ Reference Answer: {answer_info.get('answer')}
         logging.info(f"whw_description: {whw_description}")
         
         def count_sentences(text: str) -> int:
-            """Counts sentences more accurately using regex to split by various delimiters."""
             if not text or not isinstance(text, str):
                 return 0
-            sentences = nltk.sent_tokenize(text)
-            return len(sentences)
-            # sentences = re.split(r'(?<=[.!?])\s+', text)
-            # sentence_count = sum(1 for s in sentences if s.strip())
-            # return sentence_count
+            doc = _get_nlp()(text)
+            return sum(1 for _ in doc.sents)
         
         counts = {
             'why': count_sentences(whw_description.get('why') or whw_description.get('Why', '')),
@@ -279,8 +285,9 @@ Reference Answer: {answer_info.get('answer')}
                 "complexity_score": 0.0,
                 "goal_alignment": False,
                 "coherence_score": 0.0,
-                "count_whw": {'why': 0, 'how': 0, 'which': 0},
-                "whw_condition": False
+                "whw_count": {'why': 0, 'how': 0, 'which': 0},
+                "whw_description_rule": False,
+                "whw_description": ""
             }
 
         correctness = self.correctness_eval(
@@ -295,10 +302,10 @@ Reference Answer: {answer_info.get('answer')}
             submission_counts=submit_info 
         )
         logging.info(f"complexity: {complexity}")
-        whw_met, whw_counts = self.whw_condition_eval(
+        whw_description_rule, whw_counts = self.whw_condition_eval(
             whw_description=submit_info.get('whw_description', {})
         )
-        logging.info(f"whw_met: {whw_met}, whw_counts: {whw_counts}")
+        logging.info(f"whw_description_rule: {whw_description_rule}, whw_counts: {whw_counts}")
         coherence, goal_alignment = self.rpg_and_coherence_eval(
             config=config,
             model_name=config.get('model_name', 'unknown_model'),
@@ -311,6 +318,7 @@ Reference Answer: {answer_info.get('answer')}
             "complexity_score": complexity,
 			"coherence_score": 1.0 if coherence else 0.0,
             "goal_alignment": goal_alignment,
-            "count_whw": whw_counts,
-            "whw_condition": whw_met
+            "whw_count": whw_counts,
+            "whw_description_rule": whw_description_rule
+            
         }

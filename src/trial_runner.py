@@ -12,7 +12,8 @@ def run_batch_trial(config: Dict[str, Any], dataset: List[Dict[str, Any]], trial
     
     system_prompt = utils.applicant_system_prompt(config['condition'])
     submissions = []
-    for question_data in dataset:
+    for i, question_data in enumerate(dataset):
+        question_num = i + 1
         category = question_data.get("Category")
         if category == "allenai/ai2_arc":
             instruction = "\n\nProvide the answer to this question with the option letter (e.g., A, B, C, D)."
@@ -26,7 +27,7 @@ def run_batch_trial(config: Dict[str, Any], dataset: List[Dict[str, Any]], trial
             local_models=local_models
         )
         submissions.append(submission)
-        trial_logger.log_submit(submission)
+        trial_logger.log_submit(submission)     
 
     final_logs = []
     for sub_data in submissions:
@@ -52,7 +53,8 @@ def run_realtime_trial(config: Dict[str, Any], dataset: List[Dict[str, Any]], tr
     reward_window = [] # This window will store the last 2 full log dictionaries
     
     
-    for question_data in dataset:
+    for i, question_data in enumerate(dataset):
+        question_num = i + 1
         category = question_data.get("Category")
         
         # Build prompt with rich context from the sliding window of past logs

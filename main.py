@@ -85,8 +85,8 @@ def main():
     total_start_time = time.time()
     
     # Load the master dataset once for the entire run.
-    # split = "train"  # Master
-    split = "test"  # Tester 10 Question
+    split = "train"  # Master
+    # split = "test"  # Tester 10 Question
     question_dataset = dataset_loader.load_pilot_dataset(split=split)      
 
     print("Pre-loading local model for this container...")
@@ -128,13 +128,11 @@ def main():
         if config['condition'] in ['A', 'B']:
             try:
                 trial_runner.run_realtime_trial(config, question_dataset, trial_logger, local_models)
-                trial_logger.log_event("TRIAL_FINISH")
             except Exception as e:
                 print(f"[ERROR] trial {trial_num} failed:", e)
         else: # Conditions C, D
             try:
                 trial_runner.run_batch_trial(config, question_dataset, trial_logger, local_models)
-                trial_logger.log_event("TRIAL_FINISH")
             except Exception as e:
                 print(f"[ERROR] trial {trial_num} failed:", e)
         

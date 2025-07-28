@@ -240,7 +240,7 @@ def check_environment():
     """
     Performs a basic check for necessary environment variables and hardware.
     """
-    logger("--- Performing Environment Check ---")
+    logger.info("--- Performing Environment Check ---")
     # Check for API keys
     if not (settings.OPENAI_API_KEY and settings.ANTHROPIC_API_KEY):
         logger.warning("Warning: One or more API keys are missing from the .env file.")

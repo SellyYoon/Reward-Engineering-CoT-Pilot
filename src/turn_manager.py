@@ -95,10 +95,10 @@ def run_solver_turn(
         "answer": {
             "answer": question_data.get("Answer"),
             "reasoning_steps": question_data.get("reasoning_steps"),
-            "pseudocode": question_data.get("pseudocode"),
-            "loop_count": question_data.get("loop_count"),
-            "branch_count": question_data.get("branch_count"),
-            "variable_count": question_data.get("variable_count")
+            "pseudocode": question_data.get("pseudocode", None),
+            "loop_count": question_data.get("loop_count", None),
+            "branch_count": question_data.get("branch_count", None),
+            "variable_count": question_data.get("variable_count", None)
         }
     }
     

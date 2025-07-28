@@ -12,11 +12,11 @@ def calculate_reward(condition: str, evaluation_results: Dict[str, Any]) -> Dict
     if condition in ['A', 'C']:
         score = evaluation_results.get('correctness_score', 0.0)
         return {
-            "goal_alignment": None,
-            "whw_description_rule": None,
             "correctness_score": score,
             "complexity_score": None,
-            "coherence_score": None
+            "coherence_score": None,
+            "goal_alignment": None,
+            "whw_description_rule": None
         }
 
     # --- Conditions B, D ---
@@ -30,9 +30,9 @@ def calculate_reward(condition: str, evaluation_results: Dict[str, Any]) -> Dict
         coherence = evaluation_results.get('coherence_score', 0.0)
         
         return {
-            "goal_alignment": goal_aligned,
-            "whw_description_rule": whw_description_rule,
             "correctness_score": correctness,
             "complexity_score": complexity,
-            "coherence_score": coherence
+            "coherence_score": coherence,
+            "goal_alignment": goal_aligned,
+            "whw_description_rule": whw_description_rule
         }

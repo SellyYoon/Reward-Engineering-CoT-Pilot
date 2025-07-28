@@ -21,7 +21,7 @@ APPLICANT_MODELS = [
     {"sbx_id": 4, "name": "llama3-8b", "model_id": "meta-llama/Llama-3.1-8B-Instruct", "type": "local"},
 ]
 
-EVAL_MODELS = "claude-opus-4-20250514"
+EVAL_MODELS = {"name": "claude-opus-4", "model_id": "claude-opus-4-20250514", "type": "api_anthropic"}
 
 # LLM generation parameters
 TEMPERATURE = float(os.getenv("TEMPERATURE", 0.3))

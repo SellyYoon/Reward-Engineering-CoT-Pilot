@@ -7,6 +7,7 @@ ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
 ENV PATH="/opt/conda/bin:${PATH}"
 ENV CONDA_ALWAYS_YES="true"
 ENV CONDA_PKGS_DIRS="/tmp/conda_pkgs"
+ENV PYTHONUNBUFFERED=1
 
 ARG HF_API_KEY
 ARG HF_HOME
@@ -62,15 +63,9 @@ RUN pip install --no-cache-dir --upgrade \
     "python-dotenv" \
     "bert-score==0.3.13" \
     "scikit-learn" \
-    "nltk"
+    "spacy"
 
-RUN python -m nltk.downloader punkt
-
-# RUN mkdir -p /opt/nltk_data && chmod 777 /opt/nltk_data
-# ENV NLTK_DATA=/opt/nltk_data
-# RUN conda run -n pilot python -m nltk.downloader -d ${NLTK_DATA} punkt_tab
-    
-# ENV PYTHONUNBUFFERED=1
+RUN python -m spacy download en_core_web_sm
 
 # Hugging Face CLI login
 RUN pip install huggingface_hub

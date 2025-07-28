@@ -21,7 +21,7 @@ def get_reference_counts(config: dict, question_num: int) -> dict:
 # This allows you to test this module by running `python src/dataset_loader.py`
 if __name__ == "__main__":
     print("--- Testing dataset_loader.py ---")
-    dataset = load_pilot_dataset()
+    dataset = load_pilot_dataset("test")
     
     if dataset:
         print("\n--- First example from the dataset ---")
