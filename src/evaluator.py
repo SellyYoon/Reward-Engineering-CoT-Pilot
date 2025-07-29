@@ -33,24 +33,26 @@ class BasicEvaluator:
 	Primarily evaluates answer correctness.
 	"""
 	@staticmethod
-	def bertscore_eval(pred_answer: str, ref_answer: str) -> float:
+	def spacy_similarity_eval(pred_answer: str, ref_answer: str) -> float:
 		"""Evaluates sentence similarity using BERTScore F1 and returns 0 or 1 based on a threshold."""
 		# Ensure inputs are strings and not None
+		nlp = _get_nlp()
 		pred_answer_str = str(pred_answer) if pred_answer is not None else ""
 		ref_answer_str = str(ref_answer) if ref_answer is not None else ""
 
 		if not pred_answer_str or not ref_answer_str: # Handle empty strings
 			return 0.0
 
-		P, R, F1 = bert_scorer(
-			[pred_answer_str], 
-			[ref_answer_str], 
-			lang="en",
-			verbose=False,
-			model_type='microsoft/deberta-xlarge-mnli'
-		)
-		f1_score = F1.item()
-		return 1.0 if f1_score >= settings.BERTSCORE_THRESHOLD else 0.0
+		doc1 = nlp(pred_answer_str)
+		doc2 = nlp(ref_answer_str)
+
+		# Check for out-of-vocabulary words; if a doc has no vector, similarity is 0
+		if not doc1.has_vector or not doc2.has_vector or doc1.vector_norm == 0 or doc2.vector_norm == 0:
+			return 0.0
+
+		similarity = doc1.similarity(doc2)
+		# Note: You may need to add SPACY_SIMILARITY_THRESHOLD to your settings file (e.g., 0.85)
+		return 1.0 if similarity >= settings.SPACY_SIMILARITY_THRESHOLD else 0.0
 
 	@staticmethod
 	def math_eval(pred_answer: str, ref_answer: str) -> float:
@@ -106,9 +108,9 @@ class BasicEvaluator:
 		if category in ("domenicrosati/TruthfulQA", "lucadiliello/newsqa"):
 			# For TruthfulQA/NewsQA, ref_answer can be a list of correct answers
 			if isinstance(ref_answer, list):
-				return 1.0 if any(self.bertscore_eval(pred_answer_str, r) == 1.0 for r in ref_answer) else 0.0
+				return 1.0 if any(self.spacy_similarity_eval(pred_answer_str, r) == 1.0 for r in ref_answer) else 0.0
 			else:
-				return self.bertscore_eval(pred_answer_str, ref_answer)
+				return self.spacy_similarity_eval(pred_answer_str, ref_answer)
 		elif category in ("EleutherAI/hendrycks_math", "TIGER-Lab/TheoremQA"):
 			ref = ref_answer[0] if isinstance(ref_answer, list) else ref_answer
 			return self.math_eval(pred_answer_str, ref)

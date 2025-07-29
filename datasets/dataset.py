@@ -42,7 +42,7 @@ def build_master_set() -> Dataset:
     base = get_base_datasets()
     combined = concatenate_datasets(base.values())
     # Create the final master set with multiple shuffles
-    master = combined.shuffle(101).shuffle(202).shuffle(303).shuffle(404).shuffle(505)
+    master = combined.shuffle(101).shuffle(202).shuffle(303)
 
     # Tag instruction complexity via LLM API
     def tag_complexity(ex, idx):
@@ -78,7 +78,7 @@ Answer:
 
         try:
             response = model_caller.call_anthropic_api(
-                model_id=settings.EVAL_MODELS,
+                config=settings.EVAL_MODELS,
                 temperature=0.0,
                 system_prompt=prompts.PSEUDOCODE_GENERATION_PROMPT,
                 user_prompt=user_prompt
