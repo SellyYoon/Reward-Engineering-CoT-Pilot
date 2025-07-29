@@ -24,6 +24,7 @@ def calculate_reward(condition: str, evaluation_results: Dict[str, Any]) -> Dict
     if condition in ['A', 'C']:
         score = evaluation_results.get('correctness_score', 0.0)
         return {
+            "total": score,
             "correctness_score": score,
             "complexity_score": None,
             "coherence_score": None,

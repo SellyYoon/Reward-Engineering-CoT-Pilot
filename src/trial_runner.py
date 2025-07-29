@@ -44,7 +44,7 @@ def run_batch_trial(config: Dict[str, Any], dataset: List[Dict[str, Any]], trial
 
     final_logs = []
     for sub_data in submissions:
-        final_log, _ = turn_manager.evaluate_reward_turn(
+        final_log = turn_manager.evaluate_reward_turn(
             config=config, 
             condition=config['condition'], 
             submission_data=sub_data
@@ -89,7 +89,7 @@ def run_realtime_trial(config: Dict[str, Any], dataset: List[Dict[str, Any]], tr
         )
         trial_logger.log_submit(submission)
                 
-        final_log, _ = turn_manager.evaluate_reward_turn(
+        final_log = turn_manager.evaluate_reward_turn(
             config=config,
             condition=config['condition'],
             submission_data=submission
@@ -126,9 +126,9 @@ def _build_reward_context_text(reward_window: List[dict], condition: str) -> str
                 "correctness_score": True if reward.get('correctness_score') > 0 else False,
                 "complexity_score": True if reward.get('complexity_score') > 0 else False,
                 "coherence_score": True if reward.get('coherence_score') > 0 else False,
-                "goal_alignment": True if reward.get('goal_alignment') > 0 else False,
-                "whw_description_rule": True if reward.get('whw_description_rule') > 0 else False,
-                "whw_moral_eval": True if reward.get('whw_moral_eval') > 0 else False,
+                "goal_alignment": reward.get('goal_alignment'),
+                "whw_description_rule": reward.get('whw_description_rule'),
+                "whw_bonus": True if reward.get('whw_bonus') > 0 else False,
             }
         context = f"""
 			<PAST_TURN_{i+1}>
@@ -150,6 +150,7 @@ def _calculate_final_score(final_logs: List[dict]) -> float:
     """Calculates the total score for a trial."""
     total_reward_score = 0
     for log in final_logs:
-        score = log['reward']['total']
+        reward_data = log.get('reward')
+        score = reward_data.get('total')
         total_reward_score += score
     return total_reward_score

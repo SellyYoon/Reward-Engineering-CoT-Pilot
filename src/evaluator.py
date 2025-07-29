@@ -202,8 +202,8 @@ class RewardEvaluator(BasicEvaluator):
         user_prompt = f"""
 ### Original Question
 Q_Num: {question_info.get('question_num')}
-Category: {question_info.get('Category')}
-Question: {question_info.get('Question')}
+Category: {question_info.get('category')}
+Question: {question_info.get('question')}
 Reference Answer: {answer_info.get('answer')}
 
 ### Model's Submitted

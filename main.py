@@ -134,12 +134,12 @@ def main():
             try:
                 trial_runner.run_realtime_trial(config, question_dataset, trial_logger, local_models)
             except Exception as e:
-                logging.error(f"trial {trial_num} failed:", e)
+                logging.error(f"trial {trial_num} failed: {e}")
         else: # Conditions C, D
             try:
                 trial_runner.run_batch_trial(config, question_dataset, trial_logger, local_models)
             except Exception as e:
-                logging.error(f"trial {trial_num} failed:", e)
+                logging.error(f"trial {trial_num} failed: {e}")
         
         # Log the completion and duration of the trial.
         trial_end_time = time.time()
