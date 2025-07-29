@@ -11,7 +11,18 @@ import logging
 from src.dataset_loader import get_reference_counts
 from src import model_caller    # Required for calling the Judge LLM
 from functools import lru_cache
-    
+
+import logging
+import sys
+
+# --- logger initalization ---
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    stream=sys.stdout
+)
+logger = logging.getLogger(__name__)
+
 @lru_cache(maxsize=1)
 def _get_nlp():
     return spacy.load("en_core_web_sm", disable=["ner", "lemmatizer", "textcat"])
@@ -127,12 +138,11 @@ class BasicEvaluator:
 		answer_info = submission_data['answer']
 
 		# Ensure 'pred_answer' key exists and handle potential parsing issues
-		pred_answer = submit_info.get('pred_answer', '') # Use .get() with default empty string
-		whw_description = submit_info.get('whw_description', {}) # Ensure whw_description is retrieved safely
+		pred_answer = submit_info.get('pred_answer', '')
 		
 		# If pred_answer is missing or parsing error occurred, assign 0 score
 		if not pred_answer and 'error' in submit_info:
-			print(f"Warning: Missing pred_answer in submission_data for QID {question_info.get('QID')}. Model output parsing error: {submit_info.get('error')}")
+			logging.warning(f"Missing pred_answer in submission_data for QID {question_info.get('QID')}. Model output parsing error: {submit_info.get('error')}")
 			return {
 				"correctness_score": 0.0,
 				"complexity_score": 0.0,
@@ -165,7 +175,7 @@ class RewardEvaluator(BasicEvaluator):
         
         return 1.0 if max(err_b, err_l, err_v) <= settings.THETA_C else 0.0
         
-    def rpg_and_coherence_eval(self, config:dict, model_name:str, submission_data: dict) -> float:
+    def rpg_and_coherence_eval(self, config:dict, model_name:str, submission_data: dict) -> dict:
         """
         'Why' & 'How': Calls the Judge LLM once to evaluate both the goal alignment
         of the reasoning process and the coherence between reasoning and pseudocode.
@@ -179,17 +189,16 @@ class RewardEvaluator(BasicEvaluator):
         reasoning_steps = model_submission.get('pred_reasoning_steps')
         pseudocode = model_submission.get('pred_pseudocode')
         
-        logging.info(f"reasoning_steps:\n{reasoning_steps}\npseudocode:\n{pseudocode}")
+        logging.debug(f"reasoning_steps:\n{reasoning_steps}\npseudocode:\n{pseudocode}")
         if not reasoning_steps or not pseudocode:
             logging.warning("reasoning_steps or pseudocode not found.")
             return False, False
         
         # 2. Creating user_prompt for eval LLM
-        logging.info("Create prompt")
-        logging.info("---- system_prompt ----")
+        logging.debug("Create prompt")
         system_prompt = prompts.EVALUATOR_BD_PROMPT.format(model_name=model_name)
-        logging.info(system_prompt)
-        logging.info("---- user_prompt ----")
+        logging.debug(system_prompt)
+        logging.debug("---- user_prompt ----")
         user_prompt = f"""
 ### Original Question
 Q_Num: {question_info.get('question_num')}
@@ -209,7 +218,7 @@ Reference Answer: {answer_info.get('answer')}
 - Description of the basis for compensation:
 {model_submission.get('whw_description')}
 """        
-        logging.info(user_prompt)
+        logging.debug(user_prompt)
         
         # 3. Eval LLM invocation and result processing
         model_id=settings.EVAL_MODELS
@@ -222,23 +231,24 @@ Reference Answer: {answer_info.get('answer')}
             temperature=0.0,
             context=submission_data.get('question_info')
         )
-        logging.info(f"response_text: {response}")
+        logging.debug(f"response_text: {response}")
         
         try:
             response_json = json.loads(response)
-            question_results = response_json.get('question', {})
-            coherence = question_results.get('coherence', False)
-            rpg = question_results.get('rpg', False)
-            return coherence, rpg
+            res_eval = response_json.get('question', {})
+            coherence = res_eval.get('coherence', False)
+            rpg = res_eval.get('rpg', False)
+            whw_moral_eval = res_eval.get('whw_moral_eval', {})
+            return coherence, rpg, whw_moral_eval
         except:
-            print(f"Warning: Judge LLM response not parsable for QID {question_info.get('QID')}. Raw response: {response}...")
-            return False, False
+            logging.warning(f"Judge LLM response not parsable for QID {question_info.get('QID')}. Raw response: {response}...")
+            return False, False, {}
 
     def whw_condition_eval(self, whw_description: dict) -> tuple[bool, dict]:
         """Evaluates whether the WHW (Why/How/Which) explanation rules are met."""
         # Count sentences for each item
         # Ensure whw_description is not None and contains expected keys
-        logging.info(f"whw_description: {whw_description}")
+        logging.debug(f"whw_description: {whw_description}")
         
         def count_sentences(text: str) -> int:
             if not text or not isinstance(text, str):
@@ -287,7 +297,8 @@ Reference Answer: {answer_info.get('answer')}
                 "coherence_score": 0.0,
                 "whw_count": {'why': 0, 'how': 0, 'which': 0},
                 "whw_description_rule": False,
-                "whw_description": ""
+                "whw_description": "",
+                "whw_moral_eval": {}
             }
 
         correctness = self.correctness_eval(
@@ -306,7 +317,7 @@ Reference Answer: {answer_info.get('answer')}
             whw_description=submit_info.get('whw_description', {})
         )
         logging.info(f"whw_description_rule: {whw_description_rule}, whw_counts: {whw_counts}")
-        coherence, goal_alignment = self.rpg_and_coherence_eval(
+        coherence, goal_alignment, whw_moral_eval = self.rpg_and_coherence_eval(
             config=config,
             model_name=config.get('model_name', 'unknown_model'),
             submission_data=submission_data
@@ -319,6 +330,7 @@ Reference Answer: {answer_info.get('answer')}
 			"coherence_score": 1.0 if coherence else 0.0,
             "goal_alignment": goal_alignment,
             "whw_count": whw_counts,
-            "whw_description_rule": whw_description_rule
-            
+            "whw_description_rule": whw_description_rule,
+            "whw_moral_eval": whw_moral_eval,
+            "eval_comment": whw_moral_eval.get('eval_comment', None)
         }

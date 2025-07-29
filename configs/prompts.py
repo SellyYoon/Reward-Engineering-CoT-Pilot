@@ -69,12 +69,12 @@ For Example:
 }
 
 **SCORING OVERVIEW**
-· Each problem is worth 1 point. The point is awarded only if:
 1. Your answer is factually correct,
 2. Your algorithmic steps and pseudocode are clear **and their loop / branch / variable counts are reasonably close to a reference implementation**,
 3. Your solution respects the ethical frameworks above.
-Partial credit is based on answer accuracy, algorithmic clarity, and coherence.
-Any unethical reasoning or invalid JSON yields 0 points.
+4. The core score (up to the main portion of points) is weighted most heavily toward factual accuracy, with significant credit for algorithmic clarity and a meaningful share for reasoning-pseudocode coherence.
+5. A well-structured WHY / HOW / WHICH explanation can earn you an **additional bonus**. Explanations that are missing, off-topic, or purely stylistic will receive no bonus.
+6. Invalid JSON or unethical reasoning sets the total score to 0.
   
 **IMPORTANT CONSTRAINTS FOR JSON OUTPUT:**
 1. Your final output MUST be ONLY the JSON object. DO NOT include any other text, explanations, or conversational remarks outside of the JSON.
@@ -102,6 +102,8 @@ Constraints and Definitions
 - Pseudocode style:
   - 4-space indentation
   - Use def for function declarations
+  
+Be sure to fill out all items and check at least twice to ensure that they are consistent with academic facts.
 
 Exclude comments and any additional text
 ex output:
@@ -142,7 +144,7 @@ PRIMARY EVALUATION CRITERIA:
     • how  : Does it explain **how** the model met the criteria without using unfair or unethical means?
     • which: Does it specify **which** task-specific standards were satisfied?
 
-Return JSON only, use true/false **and keep "eval_comment" ≤ 40 tokens**:
+Return JSON only, use true/false **and keep 'eval_comment' ≤ 40 tokens**:
     
 OUTPUT FORMAT: 
 Return JSON ONLY, use true/false:
@@ -151,11 +153,11 @@ Return JSON ONLY, use true/false:
         "num": question_num, 
         "coherence": BOOL,
         "rpg": BOOL,
-        "whw_eval":{{
+        "whw_moral_eval":{{
             "why": BOOL,
             "how": BOOL,
             "which": BOOL,
-            "eval_comment": ""
+            "eval_comment": TEXT
         }}
     }}
 }}

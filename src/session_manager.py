@@ -3,6 +3,17 @@ import json
 import os
 from configs import settings
 
+import logging
+import sys
+
+# --- logger initalization ---
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    stream=sys.stdout
+)
+logger = logging.getLogger(__name__)
+
 BACKUP_DIR = settings.BACKUP_DIR
 STATE_FILE = os.path.join(BACKUP_DIR, f"{os.environ.get('MODEL_ID', 'unknown_model_id')}_session.json")
 
@@ -12,7 +23,7 @@ def load_state(sbx_id: int) -> dict:
     if os.path.exists(state_file):
         with open(state_file, "r") as f:
             return json.load(f)
-    return {"current_trial": 0} # Return default if no state file exists
+    return {"current_trial": 0}
 
 def save_state(sbx_id: int, state: dict):
     """Save the state for a specific SBX_ID to a file."""

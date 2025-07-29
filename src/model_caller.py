@@ -7,23 +7,36 @@ from huggingface_hub import login
 from typing import Optional
 from openai import OpenAI
 from anthropic import Anthropic
+import requests
 from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
 from functools import lru_cache
 from configs import settings
 from src import utils
+
+import logging
+import sys
+
+# --- logger initalization ---
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    stream=sys.stdout
+)
+logger = logging.getLogger(__name__)
 
 # --- Client Initialization ---
 
 # Initialize API clients. The libraries will automatically find the API keys from the environment variables
 openai_client = OpenAI(api_key=settings.OPENAI_API_KEY)
 anthropic_client = Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+grok_api_key = settings.GROK_API_KEY
 hf_api_key = settings.HF_API_KEY
 if hf_api_key:
     try:
         login(token=hf_api_key)
-        print("Successfully logged into Hugging Face Hub.")
+        logging.info("Successfully logged into Hugging Face Hub.")
     except Exception as e:
-        print(f"Failed to log into Hugging Face Hub: {e}")
+        logging.exception(f"Failed to log into Hugging Face Hub: {e}")
 
 # --- Local Model Loading ---
 @lru_cache(maxsize=None)
@@ -35,7 +48,7 @@ def load_local_model(model_id: str):
     if not model_id:
         raise ValueError(f"Local model '{model_id}' not found in settings.")
 
-    print(f"Loading local model: {model_id} into VRAM... (This may take a while)")
+    logging.info(f"Loading local model: {model_id} into VRAM... (This may take a while)")
 
     # Configuration for loading the model in 4-bit for VRAM efficiency
     quantization_config = BitsAndBytesConfig(
@@ -50,10 +63,10 @@ def load_local_model(model_id: str):
             quantization_config=quantization_config,
             device_map="auto", # Automatically use the GPU if available
         )
-        print(f"-> Model {model_id} loaded successfully.")
+        logging.info(f"-> Model {model_id} loaded successfully.")
         return model, tokenizer
     except Exception as e:
-        print(f"Error loading local model {model_id}: {e}")
+        logging.error(f"Error loading local model {model_id}: {e}")
         return None, None
 
 # --- Inference Functions ---
@@ -69,7 +82,7 @@ def call_openai_api(config: dict, system_prompt: str, user_prompt: str, eval_mod
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ],
-            temperature=settings.TEMPERATURE,
+            temperature=temperature,
             max_tokens=settings.MAX_NEW_TOKENS,
             top_p=settings.TOP_P,
             response_format={"type": "json_object"},
@@ -80,8 +93,8 @@ def call_openai_api(config: dict, system_prompt: str, user_prompt: str, eval_mod
         return response
     except Exception as e:
         model_name_for_error = eval_model_id or config.get('model_id', 'unknown')
-        print(f"Error calling OpenAI API for model {model_name_for_error}: {e}")
-        return "ERROR: OpenAI API call failed."
+        logging.error(f"Error calling OpenAI API for model {model_name_for_error}: {e}")
+        return logging.error("ERROR: OpenAI API call failed.")
 
 def call_anthropic_api(config: dict, system_prompt: str, user_prompt: str, eval_model_id: Optional[str] = None, temperature: Optional[float] = None, context: Optional[dict] = None) -> str:
     """Calls the Anthropic API and returns the response text."""
@@ -108,8 +121,52 @@ def call_anthropic_api(config: dict, system_prompt: str, user_prompt: str, eval_
         
     except Exception as e:
         model_name_for_error = eval_model_id or config.get('model_id', 'unknown')
-        print(f"Error calling Anthropic API for model {model_name_for_error}: {e}")
-        return "ERROR: Anthropic API call failed."
+        logging.error(f"Error calling Anthropic API for model {model_name_for_error}: {e}")
+        return logging.error("ERROR: Anthropic API call failed.")
+
+def call_grok_api(config: dict, system_prompt: str, user_prompt: str, eval_model_id: Optional[str] = None,
+                  temperature: Optional[float] = None, context: Optional[dict] = None) -> str:
+    """
+    Calls xAI Grok API and returns the response text.
+    """
+    try:
+        temperature = temperature if temperature is not None else settings.TEMPERATURE
+        model_id = eval_model_id if eval_model_id else config.get('model_id')
+
+        grok_api_url = f"https://api.xai.com/v1/grok/{model_id}/completions"
+
+        headers = {
+            "Authorization": f"Bearer {grok_api_key}",
+            "Content-Type": "application/json"
+        }
+
+        payload = {
+            "model": model_id,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            "temperature": temperature,
+            "max_tokens": settings.MAX_NEW_TOKENS,
+            "top_p": settings.TOP_P,
+            "top_k": settings.TOP_K,
+            "response_format": "json_object"
+        }
+
+        response = requests.post(grok_api_url, headers=headers, json=payload)
+        response.raise_for_status()
+        data = response.json()
+
+        log_context = context or {}
+        log_context['model_id'] = model_id
+        utils.log_raw_response(log_context, data, config)
+
+        return data['choices'][0]['message']['content']
+
+    except Exception as e:
+        model_name_for_error = eval_model_id or config.get('model_id', 'unknown')
+        logging.error(f"Error calling Grok API for model {model_name_for_error}: {e}")
+        return logging.error("ERROR: Grok API call failed.")
     
 def call_local_model(model, config: dict, tokenizer, system_prompt: str, user_prompt: str, context: Optional[dict] = None, temperature: Optional[float] = None,) -> str:
     """Generates a response from a loaded local model."""
@@ -131,7 +188,7 @@ def call_local_model(model, config: dict, tokenizer, system_prompt: str, user_pr
             )
         else:
             # Default to a simple concatenation if model format is unknown
-            print(f"Warning: Unknown local model format for {model_id}. Using simple concatenation.")
+            logging.warning(f"Unknown local model format for {model_id}. Using simple concatenation.")
             messages = f"{system_prompt}\n{user_prompt}"
 
         inputs = tokenizer(
@@ -147,7 +204,7 @@ def call_local_model(model, config: dict, tokenizer, system_prompt: str, user_pr
             input_ids,
             attention_mask=attention_mask,
             max_new_tokens=settings.MAX_NEW_TOKENS,
-            temperature=settings.TEMPERATURE,
+            temperature=temperature,
             top_p=settings.TOP_P,
             top_k=settings.TOP_K,
             repetition_penalty=settings.REPETITION_PENALTY,
@@ -162,15 +219,15 @@ def call_local_model(model, config: dict, tokenizer, system_prompt: str, user_pr
         return response
     
     except Exception as e:
-        print(f"Error during local model inference for {model_id}: {type(e).__name__}: {e}")
+        logging.error(f"Error during local model inference for {model_id}: {type(e).__name__}: {e}")
         if 'input_ids' in locals() and isinstance(input_ids, torch.Tensor):
-            print(f"DEBUG: input_ids shape: {input_ids.shape}, content: {input_ids}")
-            print(f"DEBUG: formatted_prompt: {messages}...")
-            print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-            print("!!!      DETAILED INFERENCE ERROR         !!!")
-            print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+            logging.debug(f"input_ids shape: {input_ids.shape}, content: {input_ids}")
+            logging.debug(f"formatted_prompt: {messages}...")
+            logging.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+            logging.error("!!!      DETAILED INFERENCE ERROR         !!!")
+            logging.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
             traceback.print_exc()
-            print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+            logging.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
             return "ERROR: Local model inference failed."
 
 def dispatch_solver_call(
@@ -201,6 +258,8 @@ def dispatch_solver_call(
         return call_openai_api(config, system_prompt, user_prompt, temperature, context=log_context)
     elif model_type == "api_anthropic":
         return call_anthropic_api(config, system_prompt, user_prompt, temperature, context=log_context)
+    elif model_type == "api_grok":
+        return call_grok_api(config, system_prompt, user_prompt, temperature=temperature, context=log_context)
     elif model_type == "local":
         if not local_models or model_id not in local_models:
             raise ValueError(f"Local model {model_id} was not pre-loaded.")

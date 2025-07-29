@@ -22,7 +22,6 @@ from src import dataset_loader, trial_runner, session_manager
 from src.logger import MainLogger, TrialLogger
 from src import utils, trial_runner
 
-# 
 # 1. Container Global Logger
 sbx_id = os.getenv('SBX_ID', 'unknown')
 model_id = os.getenv('MODEL_ID', 'unknown').replace("/", "_")
@@ -30,12 +29,13 @@ container_name = f"{sbx_id}_{model_id}"
 log_file_path = settings.LOG_DIR / f"app_{container_name}_{datetime.utcnow().strftime('%Y%m%d')}.log"
 
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
         logging.FileHandler(log_file_path, mode='a', encoding='utf-8'),
-        logging.StreamHandler(sys.stdout)
-    ]
+        logging.StreamHandler(sys.stderr)          # stdout 대신 stderr 권장
+    ],
+    force=True
 )
 
 def handle_exception(exc_type, exc_value, exc_traceback):
@@ -60,11 +60,16 @@ class StreamToLogger:
                 self.logger.log(self.level, line.rstrip())
 
     def flush(self):
-        sys.__stdout__.flush()
+        for h in self.logger.handlers:
+            h.flush()
 
 # Redirect stdout and stderr output to a logger
 sys.stdout = StreamToLogger(logging.getLogger('STDOUT'), logging.INFO)
 # sys.stderr = StreamToLogger(logging.getLogger('STDERR'), logging.ERROR)
+
+logging.info("■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■")
+logging.info("■■■■■■■■■■■ START: Reward Engineering example to CoT Reward Hacking Pilot. By Selly Yoon ■■■■■■■■■■■")
+logging.info("■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■")
 
 logging.info(f"--- Global logger initialized for container: {container_name} ---")
 
@@ -85,8 +90,8 @@ def main():
     total_start_time = time.time()
     
     # Load the master dataset once for the entire run.
-    split = "train"  # Master
-    # split = "test"  # Tester 10 Question
+    # split = "train"  # Master
+    split = "test"  # Tester 10 Question
     question_dataset = dataset_loader.load_pilot_dataset(split=split)      
 
     print("Pre-loading local model for this container...")
@@ -95,25 +100,25 @@ def main():
         if model_config.get("model_id") == model_id:
             model_id_to_load = model_config["model_id"]
             
-            print(f"INFO: Found matching model to load: {model_id_to_load}")
+            logging.info(f"Found matching model to load: {model_id_to_load}")
             model, tokenizer = model_caller.load_local_model(model_id_to_load)
             
             if model and tokenizer:
                 local_models[model_id_to_load] = {"model": model, "tokenizer": tokenizer}
-                print(f"INFO: {model_id_to_load} loaded successfully.")
+                logging.info(f"{model_id_to_load} loaded successfully.")
             else:
-                print(f"ERROR: {model_id_to_load} failed to load.")
+                logging.error(f"{model_id_to_load} failed to load.")
             break
 
     if not local_models and any(m.get("model_id") == model_id and m.get("type") == "local" for m in settings.APPLICANT_MODELS):
-        print(f"WARNING: A local model config was found for '{model_id}' in settings.py, but it failed to load.")
+        logging.warning(f"WARNING: A local model config was found for '{model_id}' in settings.py, but it failed to load.")
 
-    print("Pre-loading finished.")
+    logging.info("Pre-loading finished.")
 
     # --- Step 2: Main Experiment Loop ---
     # The loop iterates through the determined range of trials.
-    print(f"[DEBUG] TOTAL_RUNS={settings.TOTAL_RUNS}, start_trial={trial}")
-    print(f"[DEBUG] Entering loop: range({trial}, {settings.TOTAL_RUNS})")
+    logging.debug(f"TOTAL_RUNS={settings.TOTAL_RUNS}, start_trial={trial}")
+    logging.debug(f"Entering loop: range({trial}, {settings.TOTAL_RUNS})")
     for trial_num in range(trial, settings.TOTAL_RUNS + 1): 
         
         # Get all configuration for the current trial from the session manager.
@@ -129,12 +134,12 @@ def main():
             try:
                 trial_runner.run_realtime_trial(config, question_dataset, trial_logger, local_models)
             except Exception as e:
-                print(f"[ERROR] trial {trial_num} failed:", e)
+                logging.error(f"trial {trial_num} failed:", e)
         else: # Conditions C, D
             try:
                 trial_runner.run_batch_trial(config, question_dataset, trial_logger, local_models)
             except Exception as e:
-                print(f"[ERROR] trial {trial_num} failed:", e)
+                logging.error(f"trial {trial_num} failed:", e)
         
         # Log the completion and duration of the trial.
         trial_end_time = time.time()
@@ -158,7 +163,11 @@ def main():
     total_end_time = time.time()
     total_time = time.strftime("%H:%M:%S", time.gmtime(total_end_time - total_start_time))
     MainLogger.log_process_finish(sbx_id=sbx_id, total_time=total_time)
-    print("\n--- Experiment Finished Successfully ---")
+    logging.info("\n--- Experiment Finished Successfully ---")
+
+logging.info("■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■")
+logging.info("■■■■■■■■■■■ FINISH: Reward Engineering example to CoT Reward Hacking Pilot. By Selly Yoon ■■■■■■■■■■■")
+logging.info("■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■")
 
 if __name__ == "__main__":
     main()

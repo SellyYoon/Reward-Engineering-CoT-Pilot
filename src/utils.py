@@ -41,8 +41,8 @@ def retry(retries=3, delay=5):
                 try:
                     return func(*args, **kwargs)
                 except Exception as e:
-                    print(f"Call to {func.__name__} failed. Retrying in {delay}s... ({i+1}/{retries})")
-                    print(f"Error: {e}")
+                    logger.warning(f"Call to {func.__name__} failed. Retrying in {delay}s... ({i+1}/{retries})")
+                    logger.error(f"Error: {e}")
                     time.sleep(delay)
             raise ConnectionError(f"Function {func.__name__} failed after {retries} retries.")
         return wrapper
@@ -130,7 +130,7 @@ def parse_model_json_output(response_text: str) -> dict:
         return {k.strip(): v for k, v in data.items()}
     except json.JSONDecodeError as e:
         # Step 4: If parsing still fails, fall back to manual regex extraction
-        print(f"Warning: JSON parsing failed after cleaning: {e}. Falling back to manual extraction.")
+        logger.warning(f"JSON parsing failed after cleaning: {e}. Falling back to manual extraction.")
         return extract_fields_manually(response_text)
         
 def log_raw_response(context: Dict[str, Any], response_text: str, config: int):
@@ -143,7 +143,7 @@ def log_raw_response(context: Dict[str, Any], response_text: str, config: int):
     try:
         os.makedirs(log_dir, exist_ok=True)
     except OSError as e:
-        print(f"CRITICAL WARNING: Failed to create log directory {log_dir}: {e}")
+        logger.critical(f"CRITICAL WARNING: Failed to create log directory {log_dir}: {e}")
         return
     timestamp = datetime.now().strftime('%Y%m%d%H')
     log_path = log_dir / f"{config['session_id']}_{timestamp}_responses.jsonl"    
@@ -157,7 +157,7 @@ def log_raw_response(context: Dict[str, Any], response_text: str, config: int):
         with open(log_path, "a", encoding="utf-8") as f:
             f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
     except Exception as e:
-        print(f"CRITICAL WARNING: Failed to write raw response to log file: {e}")
+        logger.critical(f"CRITICAL WARNING: Failed to write raw response to log file: {e}")
     
 def backup(session_id: str, model_id: str):
     """

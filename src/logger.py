@@ -5,6 +5,16 @@ import json
 import os
 from datetime import datetime
 from configs import settings
+import logging
+import sys
+
+# --- logger initalization ---
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    stream=sys.stdout
+)
+logger = logging.getLogger(__name__)
 
 # --- Main Process Logger ---
 

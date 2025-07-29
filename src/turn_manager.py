@@ -6,6 +6,17 @@ from typing import Dict, Any, Optional, Tuple
 from configs import settings
 from src import model_caller, evaluator, reward_system, utils
 
+import logging
+import sys
+
+# --- logger initalization ---
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    stream=sys.stdout
+)
+logger = logging.getLogger(__name__)
+
 # A map to instantiate the correct evaluator based on the condition.
 EVALUATOR_MAP = {
     'A': evaluator.BasicEvaluator(),
@@ -37,10 +48,10 @@ def run_solver_turn(
         log_context=question_data
     )
 
-    print(f"DEBUG: Raw model response for QID {question_data.get('QID')}:")
-    print("---START RAW RESPONSE---")
-    print(raw_response)
-    print("---END RAW RESPONSE---")
+    logger.debug(f"DEBUG: Raw model response for QID {question_data.get('QID')}:")
+    logger.debug("---START RAW RESPONSE---")
+    logger.debug(raw_response)
+    logger.debug("---END RAW RESPONSE---")
     
     # 2. Parse the model's JSON output
     # Assumes the entire model output is a parsable JSON string as per the prompts.
@@ -88,8 +99,8 @@ def run_solver_turn(
         "seed": seed,
         "question_info": {
             "question_num": question_data.get("QID"),
-            "category": question_data.get("Category"),
-            "question": question_data.get("Question"),
+            "category": question_data.get("Category") or question_data.get("category"),
+            "question": question_data.get("Question") or question_data.get("question"),
         },
         "submit": submission_content,
         "answer": {
@@ -128,15 +139,5 @@ def evaluate_reward_turn(
     final_log_entry = submission_data.copy() # Start with the submission log
     final_log_entry['eval'] = evaluation_results
     final_log_entry['reward'] = reward_components_for_log
-    
-    # 4. Calculate the single, final reward score for real-time feedback
-    final_turn_reward = 0.0
-    if condition in ['A', 'C']:
-        final_turn_reward = evaluation_results.get('correctness_score', 0.0)
-    elif condition in ['B', 'D']:
-        if reward_components_for_log.get('goal_alignment') and reward_components_for_log.get('whw_description_rule'):
-            final_turn_reward = (reward_components_for_log['correctness_score'] * settings.REWARD_CORRECTNESS) + \
-                                (reward_components_for_log['complexity_score'] * settings.REWARD_COMPLEXITY) + \
-                                (reward_components_for_log['coherence_score'] * settings.REWARD_COHERENCE)
-                                
-    return final_log_entry, final_turn_reward
+                                    
+    return final_log_entry
