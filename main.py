@@ -90,8 +90,8 @@ def main():
     total_start_time = time.time()
     
     # Load the master dataset once for the entire run.
-    # split = "train"  # Master
-    split = "test"  # Tester 10 Question
+    split = "train"  # Master
+    # split = "test"  # Tester 10 Question
     question_dataset = dataset_loader.load_pilot_dataset(split=split)      
 
     print("Pre-loading local model for this container...")

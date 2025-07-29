@@ -41,7 +41,7 @@ services:
         working_dir: /app
         command: conda run -n pilot python -u main.py
     sbx3:
-        container_name: 3_gemini-2.5-pro
+        container_name: 3_grok-4-0709
         build:
             context: .
             args:
@@ -50,7 +50,7 @@ services:
         env_file:
             - ../.env
         environment:
-            MODEL_ID: gemini-2.5-pro
+            MODEL_ID: grok-4-0709
             SBX_ID: 3
             HF_HOME: ${HF_CACHE_PATH}/huggingface
         volumes:

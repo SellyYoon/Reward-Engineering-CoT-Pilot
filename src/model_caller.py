@@ -1,16 +1,19 @@
 # src/model_caller.py
 # Handles inference calls to both API-based and local LLMs.
 
+import json
 import torch
 import traceback
 from huggingface_hub import login
-from typing import Optional
+from typing import Optional, Type
+from pydantic import BaseModel
 from openai import OpenAI
 from anthropic import Anthropic
-import requests
+from xai_sdk import Client
+from xai_sdk.chat import user, system
 from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
 from functools import lru_cache
-from configs import settings
+from configs import settings, schemas
 from src import utils
 
 import logging
@@ -29,7 +32,7 @@ logger = logging.getLogger(__name__)
 # Initialize API clients. The libraries will automatically find the API keys from the environment variables
 openai_client = OpenAI(api_key=settings.OPENAI_API_KEY)
 anthropic_client = Anthropic(api_key=settings.ANTHROPIC_API_KEY)
-grok_api_key = settings.GROK_API_KEY
+grok_client = Client(api_key=settings.GROK_API_KEY)
 hf_api_key = settings.HF_API_KEY
 if hf_api_key:
     try:
@@ -92,8 +95,8 @@ def call_openai_api(config: dict, system_prompt: str, user_prompt: str, eval_mod
         utils.log_raw_response(log_context, response, config)
         return response
     except Exception as e:
-        model_name_for_error = eval_model_id or config.get('model_id', 'unknown')
-        logging.error(f"Error calling OpenAI API for model {model_name_for_error}: {e}")
+        model_id_for_error = eval_model_id or config.get('model_id', 'unknown')
+        logging.error(f"Error calling OpenAI API for model {model_id_for_error}: {e}")
         return logging.error("ERROR: OpenAI API call failed.")
 
 def call_anthropic_api(config: dict, system_prompt: str, user_prompt: str, eval_model_id: Optional[str] = None, temperature: Optional[float] = None, context: Optional[dict] = None) -> str:
@@ -120,12 +123,19 @@ def call_anthropic_api(config: dict, system_prompt: str, user_prompt: str, eval_
         return json_response
         
     except Exception as e:
-        model_name_for_error = eval_model_id or config.get('model_id', 'unknown')
-        logging.error(f"Error calling Anthropic API for model {model_name_for_error}: {e}")
+        model_id_for_error = eval_model_id or config.get('model_id', 'unknown')
+        logging.error(f"Error calling Anthropic API for model {model_id_for_error}: {e}")
         return logging.error("ERROR: Anthropic API call failed.")
 
-def call_grok_api(config: dict, system_prompt: str, user_prompt: str, eval_model_id: Optional[str] = None,
-                  temperature: Optional[float] = None, context: Optional[dict] = None) -> str:
+def call_grok_api(
+    config: dict, 
+    system_prompt: str, 
+    user_prompt: str, 
+    output_schema: Type[BaseModel],
+    eval_model_id: Optional[str] = None,
+    temperature: Optional[float] = None, 
+    context: Optional[dict] = None
+) -> str:
     """
     Calls xAI Grok API and returns the response text.
     """
@@ -133,39 +143,21 @@ def call_grok_api(config: dict, system_prompt: str, user_prompt: str, eval_model
         temperature = temperature if temperature is not None else settings.TEMPERATURE
         model_id = eval_model_id if eval_model_id else config.get('model_id')
 
-        grok_api_url = f"https://api.xai.com/v1/grok/{model_id}/completions"
+        chat = grok_client.chat.create(model="grok-4-0709", temperature=0)
+        chat.append(system(system_prompt))
+        chat.append(user(user_prompt))
 
-        headers = {
-            "Authorization": f"Bearer {grok_api_key}",
-            "Content-Type": "application/json"
-        }
-
-        payload = {
-            "model": model_id,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
-            ],
-            "temperature": temperature,
-            "max_tokens": settings.MAX_NEW_TOKENS,
-            "top_p": settings.TOP_P,
-            "top_k": settings.TOP_K,
-            "response_format": "json_object"
-        }
-
-        response = requests.post(grok_api_url, headers=headers, json=payload)
-        response.raise_for_status()
-        data = response.json()
+        response, parsed_object = chat.parse(output_schema)
 
         log_context = context or {}
         log_context['model_id'] = model_id
-        utils.log_raw_response(log_context, data, config)
+        utils.log_raw_response(log_context, response, config)
 
-        return data['choices'][0]['message']['content']
+        return parsed_object.model_dump_json()
 
     except Exception as e:
-        model_name_for_error = eval_model_id or config.get('model_id', 'unknown')
-        logging.error(f"Error calling Grok API for model {model_name_for_error}: {e}")
+        model_id_for_error = eval_model_id or config.get('model_id', 'unknown')
+        logging.error(f"Error calling Grok API for model {model_id_for_error}: {e}")
         return logging.error("ERROR: Grok API call failed.")
     
 def call_local_model(model, config: dict, tokenizer, system_prompt: str, user_prompt: str, context: Optional[dict] = None, temperature: Optional[float] = None,) -> str:
@@ -236,7 +228,8 @@ def dispatch_solver_call(
     user_prompt: str, 
     temperature: Optional[float] = None,
     local_models: Optional[dict] = None,
-    log_context: Optional[dict] = None
+    log_context: Optional[dict] = None,
+    output_schema: Optional[Type[BaseModel]] = None
 ) -> str:
     """
     Finds the solver model config for the given sbx_id and calls it.
@@ -245,6 +238,7 @@ def dispatch_solver_call(
     model_id = config['model_id']
     sbx_id = config['sbx_id']
     temperature = temperature if temperature else settings.TEMPERATURE
+    output_schema = output_schema if output_schema else schemas.TaskOutput
     
     # Find model settings corresponding to sbx_id
     model_config = next((m for m in settings.APPLICANT_MODELS if m["sbx_id"] == sbx_id), None)
@@ -258,8 +252,14 @@ def dispatch_solver_call(
         return call_openai_api(config, system_prompt, user_prompt, temperature, context=log_context)
     elif model_type == "api_anthropic":
         return call_anthropic_api(config, system_prompt, user_prompt, temperature, context=log_context)
-    elif model_type == "api_grok":
-        return call_grok_api(config, system_prompt, user_prompt, temperature=temperature, context=log_context)
+    elif model_type == "api_xai":
+        if output_schema:
+            final_schema = output_schema
+        elif config['condition'] in ('A', 'C'):
+            final_schema = schemas.SimpleTaskOutput
+        else: # Conditions 'B', 'D'
+            final_schema = schemas.TaskOutput
+        return call_grok_api(config, system_prompt, user_prompt, temperature=temperature, context=log_context, output_schema=final_schema)
     elif model_type == "local":
         if not local_models or model_id not in local_models:
             raise ValueError(f"Local model {model_id} was not pre-loaded.")
