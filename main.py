@@ -94,24 +94,23 @@ def main():
     # split = "test"  # Tester 10 Question
     question_dataset = dataset_loader.load_pilot_dataset(split=split)      
 
-    print("Pre-loading local model for this container...")
     local_models = {}
     for model_config in settings.APPLICANT_MODELS:
         if model_config.get("model_id") == model_id:
             model_id_to_load = model_config["model_id"]
-            
-            logging.info(f"Found matching model to load: {model_id_to_load}")
-            model, tokenizer = model_caller.load_local_model(model_id_to_load)
-            
-            if model and tokenizer:
-                local_models[model_id_to_load] = {"model": model, "tokenizer": tokenizer}
-                logging.info(f"{model_id_to_load} loaded successfully.")
-            else:
-                logging.error(f"{model_id_to_load} failed to load.")
-            break
+            if model_config.get("type") == "local":
+                logging.info("Pre-loading local model for this container...")
+                logging.info(f"Found matching model to load: {model_id_to_load}")
+                model, tokenizer = model_caller.load_local_model(model_id_to_load)
+                if model and tokenizer:
+                    local_models[model_id_to_load] = {"model": model, "tokenizer": tokenizer}
+                    logging.info(f"{model_id_to_load} loaded successfully.")
+                else:
+                    logging.error(f"{model_id_to_load} failed to load.")
+                break
 
     if not local_models and any(m.get("model_id") == model_id and m.get("type") == "local" for m in settings.APPLICANT_MODELS):
-        logging.warning(f"WARNING: A local model config was found for '{model_id}' in settings.py, but it failed to load.")
+        logging.warning(f"A local model config was found for '{model_id}' in settings.py, but it failed to load.")
 
     logging.info("Pre-loading finished.")
 

@@ -13,7 +13,7 @@ import torch
 from pathlib import Path
 from datetime import datetime, timezone
 from functools import wraps
-from typing import Any, Dict
+from typing import Any, Dict, Union
 from configs import settings, prompts
 
 # --- logger initalization ---
@@ -133,10 +133,14 @@ def parse_model_json_output(response_text: str) -> dict:
         logger.warning(f"JSON parsing failed after cleaning: {e}. Falling back to manual extraction.")
         return extract_fields_manually(response_text)
         
-def log_raw_response(context: Dict[str, Any], response_text: str, config: int):
+def log_raw_response(context: Dict[str, Any], response_content: Union[str, Dict[str, Any]], config: Dict[str, Any]):
     """
     Safely record the original response of the model to a file before parsing it.
     """
+    if not isinstance(config, dict):
+        logger.critical(f"CRITICAL WARNING: 'config' parameter is not a dictionary: {type(config)}. Skipping log.")
+        return
+    
     model_id = config['model_id'].replace("/", "_")
     log_dir = settings.BACKUP_DIR / model_id
 
@@ -147,10 +151,22 @@ def log_raw_response(context: Dict[str, Any], response_text: str, config: int):
         return
     timestamp = datetime.now().strftime('%Y%m%d%H')
     log_path = log_dir / f"{config['session_id']}_{timestamp}_responses.jsonl"    
+    
+        # Check type of response_content and convert to string if it's a dictionary
+    serialized_response_content: str
+    if isinstance(response_content, dict):
+        try:
+            serialized_response_content = json.dumps(response_content, ensure_ascii=False)
+        except TypeError as e:
+            logger.critical(f"CRITICAL WARNING: Failed to JSON serialize dictionary response: {e}. Data: {str(response_content)[:200]}")
+            serialized_response_content = str(response_content) # Fallback to string representation
+    else: # Assume it's already a string
+        serialized_response_content = response_content
+
     log_entry = {
         "qid": context.get("QID"),
         "context": context,
-        "raw_response": response_text
+        "raw_response": serialized_response_content
     }
     
     try:

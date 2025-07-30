@@ -64,8 +64,6 @@ def run_realtime_trial(config: Dict[str, Any], dataset: List[Dict[str, Any]], tr
     
     final_logs = []
     reward_window = [] # This window will store the last 2 full log dictionaries
-    question_info = dataset
-    logger.debug(question_info)
     for i, question_data in enumerate(dataset):
         question_num = i + 1
         category = question_data.get("Category") or question_data.get("category")

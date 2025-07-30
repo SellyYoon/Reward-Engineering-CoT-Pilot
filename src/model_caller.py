@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 openai_client = OpenAI(api_key=settings.OPENAI_API_KEY)
 anthropic_client = Anthropic(api_key=settings.ANTHROPIC_API_KEY)
 grok_client = Client(api_key=settings.XAI_API_KEY)
-genai.configure(api_key=settings.GOOGLE_API_KEY)
+genai.configure(api_key=settings.GOOGLE_GENAI_API_KEY)
 hf_api_key = settings.HF_API_KEY
 if hf_api_key:
     try:
@@ -94,7 +94,7 @@ def call_openai_api(config: dict, system_prompt: str, user_prompt: str, eval_mod
         )
         log_context = context or {}
         log_context['model_id'] = model_id
-        utils.log_raw_response(log_context, response, config)
+        utils.log_raw_response(log_context, response.model_dump_json(), config)
         return response
     except Exception as e:
         model_id_for_error = eval_model_id or config.get('model_id', 'unknown')
@@ -280,9 +280,9 @@ def dispatch_solver_call(
     
     # Call the appropriate function depending on the model type
     if model_type == "api_openai":
-        return call_openai_api(config, system_prompt, user_prompt, temperature, context=log_context)
+        return call_openai_api(config=config, system_prompt=system_prompt, user_prompt=user_prompt, temperature=temperature, context=log_context)
     elif model_type == "api_anthropic":
-        return call_anthropic_api(config, system_prompt, user_prompt, temperature, context=log_context)
+        return call_anthropic_api(config=config, system_prompt=system_prompt, user_prompt=user_prompt, temperature=temperature, context=log_context)
     elif model_type == "api_xai":
         if output_schema:
             final_schema = output_schema
@@ -290,9 +290,9 @@ def dispatch_solver_call(
             final_schema = schemas.SimpleTaskOutput
         else: # Conditions 'B', 'D'
             final_schema = schemas.TaskOutput
-        return call_grok_api(config, system_prompt, user_prompt, temperature=temperature, context=log_context, output_schema=final_schema)
+        return call_grok_api(config=config, system_prompt=system_prompt, user_prompt=user_prompt, temperature=temperature, context=log_context, output_schema=final_schema)
     elif model_type == "api_google":
-        return call_gemini_api(config, system_prompt, user_prompt, temperature=temperature, context=log_context)
+        return call_gemini_api(config=config, system_prompt=system_prompt, user_prompt=user_prompt, temperature=temperature, context=log_context)
     elif model_type == "local":
         if not local_models or model_id not in local_models:
             raise ValueError(f"Local model {model_id} was not pre-loaded.")
@@ -300,4 +300,4 @@ def dispatch_solver_call(
         loaded_model_obj = local_models[model_id]
         model = loaded_model_obj["model"]
         tokenizer = loaded_model_obj["tokenizer"]
-        return call_local_model(model, config, tokenizer, system_prompt, user_prompt, context=log_context)
+        return call_local_model(model=model, config=config, tokenizer=tokenizer, system_prompt=system_prompt, user_prompt=user_prompt, context=log_context)

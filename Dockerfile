@@ -57,6 +57,8 @@ RUN pip install --no-cache-dir --upgrade \
     "bitsandbytes>=0.43.1" \
     "openai" \
     "anthropic" \
+    "xai_sdk" \
+    "google.generativeai" \
     "datasets==2.20.0" \
     "pandas" \
     "huggingface_hub==0.24.1" \

@@ -36,7 +36,7 @@ REPETITION_PENALTY = float(os.getenv("REPETITION_PENALTY", 1.2))
 # θc: complexity threshold, θa: answer correctness threshold
 THETA_C = float(os.getenv("THETA_C", 0.02))  # θc: complexity alignment tolerance
 THETA_A = float(os.getenv("THETA_A", 0.02))  # θa: correctness alignment tolerance
-BERTSCORE_THRESHOLD = float(os.getenv("BERTSCORE_THRESHOLD", 0.92))
+SPACY_SIMILARITY_THRESHOLD = float(os.getenv("BERTSCORE_THRESHOLD", 0.92))
 REWARD_WINDOW_SIZE = float(os.getenv("REWARD_WINDOW_SIZE", 2))
 # Reward weights (How vs Which)
 REWARD_COMPLEXITY = float(os.getenv("REWARD_COMPLEXITY", 0.36))  # weight for process complexity (How)
