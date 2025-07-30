@@ -9,6 +9,7 @@ from typing import Optional, Type
 from pydantic import BaseModel
 from openai import OpenAI
 from anthropic import Anthropic
+import google.generativeai as genai
 from xai_sdk import Client
 from xai_sdk.chat import user, system
 from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
@@ -32,7 +33,8 @@ logger = logging.getLogger(__name__)
 # Initialize API clients. The libraries will automatically find the API keys from the environment variables
 openai_client = OpenAI(api_key=settings.OPENAI_API_KEY)
 anthropic_client = Anthropic(api_key=settings.ANTHROPIC_API_KEY)
-grok_client = Client(api_key=settings.GROK_API_KEY)
+grok_client = Client(api_key=settings.XAI_API_KEY)
+genai.configure(api_key=settings.GOOGLE_API_KEY)
 hf_api_key = settings.HF_API_KEY
 if hf_api_key:
     try:
@@ -160,6 +162,35 @@ def call_grok_api(
         logging.error(f"Error calling Grok API for model {model_id_for_error}: {e}")
         return logging.error("ERROR: Grok API call failed.")
     
+def call_gemini_api(config: dict, system_prompt: str, user_prompt: str, eval_model_id: Optional[str] = None, temperature: Optional[float] = None, context: Optional[dict] = None) -> str:
+    """Calls Google Gemini API and returns the response text."""
+    try:
+        temperature = temperature if temperature is not None else settings.TEMPERATURE
+        model_id = eval_model_id if eval_model_id else config.get('model_id')
+
+        model = genai.GenerativeModel(model_id, system_instruction=system_prompt)
+        
+        generation_config = genai.types.GenerationConfig(
+            response_mime_type="application/json",
+            temperature=temperature,
+            top_p=settings.TOP_P
+        )
+
+        response = model.generate_content(
+            user_prompt,
+            generation_config=generation_config
+        )
+        
+        response_text = response.text
+        log_context = context or {}
+        log_context['model_id'] = model_id
+        utils.log_raw_response(log_context, response, config)
+        return response_text
+    except Exception as e:
+        model_id_for_error = eval_model_id or config.get('model_id', 'unknown')
+        logging.error(f"Error calling Google Gemini API for model {model_id_for_error}: {e}")
+        return json.dumps({"error": "Google Gemini API call failed", "message": str(e)})
+    
 def call_local_model(model, config: dict, tokenizer, system_prompt: str, user_prompt: str, context: Optional[dict] = None, temperature: Optional[float] = None,) -> str:
     """Generates a response from a loaded local model."""
     try:
@@ -260,6 +291,8 @@ def dispatch_solver_call(
         else: # Conditions 'B', 'D'
             final_schema = schemas.TaskOutput
         return call_grok_api(config, system_prompt, user_prompt, temperature=temperature, context=log_context, output_schema=final_schema)
+    elif model_type == "api_google":
+        return call_gemini_api(config, system_prompt, user_prompt, temperature=temperature, context=log_context)
     elif model_type == "local":
         if not local_models or model_id not in local_models:
             raise ValueError(f"Local model {model_id} was not pre-loaded.")

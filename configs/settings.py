@@ -11,7 +11,8 @@ env_path = PROJECT_ROOT.parent / ".env"
 load_dotenv(dotenv_path=env_path)
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
-GROK_API_KEY = os.getenv("GROK_API_KEY")
+XAI_API_KEY = os.getenv("GROK_API_KEY")
+GOOGLE_GENAI_API_KEY = os.getenv("GOOGLE_GENAI_API_KEY")
 HF_API_KEY = os.getenv("HF_API_KEY")
 
 # Model configuration
