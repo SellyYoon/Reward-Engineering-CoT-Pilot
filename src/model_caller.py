@@ -5,7 +5,7 @@ import json
 import torch
 import traceback
 from huggingface_hub import login
-from typing import Optional, Type
+from typing import Optional, Type, Any, Dict, Union
 from pydantic import BaseModel
 from openai import OpenAI
 from anthropic import Anthropic
@@ -76,7 +76,14 @@ def load_local_model(model_id: str):
 
 # --- Inference Functions ---
 
-def call_openai_api(config: dict, system_prompt: str, user_prompt: str, eval_model_id: Optional[str] = None, temperature: Optional[float] = None, context: Optional[dict] = None) -> str:
+def call_openai_api(
+    config: dict[str, Any],
+    system_prompt: str,
+    user_prompt: str,
+    eval_model_id: Optional[str] = None,
+    temperature: Optional[float] = None,
+    context: Optional[dict] = None
+) -> str:
     """Calls the OpenAI API and returns the response text."""
     try:
         temperature = temperature if temperature else settings.TEMPERATURE
@@ -94,14 +101,27 @@ def call_openai_api(config: dict, system_prompt: str, user_prompt: str, eval_mod
         )
         log_context = context or {}
         log_context['model_id'] = model_id
-        utils.log_raw_response(log_context, response.model_dump_json(), config)
-        return response
+        utils.log_raw_response(log_context, response, config)
+        
+        # Return the actual content for the application's use.
+        if response.choices and response.choices[0].message.content:
+            return response.choices[0].message.content
+        else:
+            logging.error(f"OpenAI API response content is empty or malformed for model {model_id}.")
+            return json.dumps({"error": "Empty or malformed OpenAI response content"})
     except Exception as e:
         model_id_for_error = eval_model_id or config.get('model_id', 'unknown')
         logging.error(f"Error calling OpenAI API for model {model_id_for_error}: {e}")
         return logging.error("ERROR: OpenAI API call failed.")
 
-def call_anthropic_api(config: dict, system_prompt: str, user_prompt: str, eval_model_id: Optional[str] = None, temperature: Optional[float] = None, context: Optional[dict] = None) -> str:
+def call_anthropic_api(
+    config: dict[str, Any],
+    system_prompt: str,
+    user_prompt: str,
+    eval_model_id: Optional[str] = None,
+    temperature: Optional[float] = None,
+    context: Optional[dict] = None
+) -> str:
     """Calls the Anthropic API and returns the response text."""
     try:
         temperature = temperature if temperature else settings.TEMPERATURE
@@ -118,21 +138,26 @@ def call_anthropic_api(config: dict, system_prompt: str, user_prompt: str, eval_
             top_p=settings.TOP_P,
             top_k=settings.TOP_K
         )
-        json_response = "{" + response.content[0].text
+
         log_context = context or {}
         log_context['model_id'] = model_id
-        utils.log_raw_response(log_context, json_response, config)
-        return json_response
+        utils.log_raw_response(log_context, response, config)
+
+        if response.content and response.content[0].text:
+            return response.content[0].text
+        else:
+            logging.error(f"Anthropic API response content is empty or malformed for model {model_id}.")
+            return json.dumps({"error": "Empty or malformed Anthropic response content"})
         
     except Exception as e:
         model_id_for_error = eval_model_id or config.get('model_id', 'unknown')
         logging.error(f"Error calling Anthropic API for model {model_id_for_error}: {e}")
         return logging.error("ERROR: Anthropic API call failed.")
 
-def call_grok_api(
-    config: dict, 
-    system_prompt: str, 
-    user_prompt: str, 
+def call_grok_api(    
+    config: dict[str, Any],     
+    system_prompt: str,
+    user_prompt: str,     
     output_schema: Type[BaseModel],
     eval_model_id: Optional[str] = None,
     temperature: Optional[float] = None, 
@@ -162,7 +187,14 @@ def call_grok_api(
         logging.error(f"Error calling Grok API for model {model_id_for_error}: {e}")
         return logging.error("ERROR: Grok API call failed.")
     
-def call_gemini_api(config: dict, system_prompt: str, user_prompt: str, eval_model_id: Optional[str] = None, temperature: Optional[float] = None, context: Optional[dict] = None) -> str:
+def call_gemini_api(
+    config: dict[str, Any],
+    system_prompt: str,
+    user_prompt: str,
+    eval_model_id: Optional[str] = None,
+    temperature: Optional[float] = None,
+    context: Optional[dict] = None
+) -> str:
     """Calls Google Gemini API and returns the response text."""
     try:
         temperature = temperature if temperature is not None else settings.TEMPERATURE
@@ -181,18 +213,28 @@ def call_gemini_api(config: dict, system_prompt: str, user_prompt: str, eval_mod
             generation_config=generation_config
         )
         
-        response_text = response.text
         log_context = context or {}
         log_context['model_id'] = model_id
         utils.log_raw_response(log_context, response, config)
+        
+        response_text = response.text
         return response_text
     except Exception as e:
         model_id_for_error = eval_model_id or config.get('model_id', 'unknown')
         logging.error(f"Error calling Google Gemini API for model {model_id_for_error}: {e}")
         return json.dumps({"error": "Google Gemini API call failed", "message": str(e)})
     
-def call_local_model(model, config: dict, tokenizer, system_prompt: str, user_prompt: str, context: Optional[dict] = None, temperature: Optional[float] = None,) -> str:
-    """Generates a response from a loaded local model."""
+def call_local_model(
+    model,
+    config: dict[str, Any],
+    tokenizer,
+    system_prompt: str,
+    user_prompt: str,
+    context: Optional[dict] = None,
+    temperature: Optional[float] = None
+) -> str:
+    """Generates
+     a response from a loaded local model."""
     try:
         # Determine prompt format based on model_id
         temperature = temperature if temperature else settings.TEMPERATURE        
@@ -254,9 +296,9 @@ def call_local_model(model, config: dict, tokenizer, system_prompt: str, user_pr
             return "ERROR: Local model inference failed."
 
 def dispatch_solver_call(
-    config: dict,
-    system_prompt: str, 
-    user_prompt: str, 
+    config: dict[str, Any],
+    system_prompt: str,
+    user_prompt: str,
     temperature: Optional[float] = None,
     local_models: Optional[dict] = None,
     log_context: Optional[dict] = None,
@@ -280,9 +322,21 @@ def dispatch_solver_call(
     
     # Call the appropriate function depending on the model type
     if model_type == "api_openai":
-        return call_openai_api(config=config, system_prompt=system_prompt, user_prompt=user_prompt, temperature=temperature, context=log_context)
+        return call_openai_api(
+            config=config,
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            temperature=temperature,
+            context=log_context
+        )
     elif model_type == "api_anthropic":
-        return call_anthropic_api(config=config, system_prompt=system_prompt, user_prompt=user_prompt, temperature=temperature, context=log_context)
+        return call_anthropic_api(
+            config=config,
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            temperature=temperature,
+            context=log_context
+        )
     elif model_type == "api_xai":
         if output_schema:
             final_schema = output_schema
@@ -290,9 +344,22 @@ def dispatch_solver_call(
             final_schema = schemas.SimpleTaskOutput
         else: # Conditions 'B', 'D'
             final_schema = schemas.TaskOutput
-        return call_grok_api(config=config, system_prompt=system_prompt, user_prompt=user_prompt, temperature=temperature, context=log_context, output_schema=final_schema)
+        return call_grok_api(
+            config=config,
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            temperature=temperature,
+            context=log_context,
+            output_schema=final_schema
+        )
     elif model_type == "api_google":
-        return call_gemini_api(config=config, system_prompt=system_prompt, user_prompt=user_prompt, temperature=temperature, context=log_context)
+        return call_gemini_api(
+            config=config,
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            temperature=temperature,
+            context=log_context
+        )
     elif model_type == "local":
         if not local_models or model_id not in local_models:
             raise ValueError(f"Local model {model_id} was not pre-loaded.")
@@ -300,4 +367,11 @@ def dispatch_solver_call(
         loaded_model_obj = local_models[model_id]
         model = loaded_model_obj["model"]
         tokenizer = loaded_model_obj["tokenizer"]
-        return call_local_model(model=model, config=config, tokenizer=tokenizer, system_prompt=system_prompt, user_prompt=user_prompt, context=log_context)
+        return call_local_model(
+            model=model, 
+            config=config,
+            tokenizer=tokenizer,
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            context=log_context
+        )

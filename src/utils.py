@@ -14,7 +14,9 @@ from pathlib import Path
 from datetime import datetime, timezone
 from functools import wraps
 from typing import Any, Dict, Union
+from xai_sdk.chat import Response as XaiResponse
 from configs import settings, prompts
+from pydantic import BaseModel
 
 # --- logger initalization ---
 logging.basicConfig(
@@ -133,7 +135,7 @@ def parse_model_json_output(response_text: str) -> dict:
         logger.warning(f"JSON parsing failed after cleaning: {e}. Falling back to manual extraction.")
         return extract_fields_manually(response_text)
         
-def log_raw_response(context: Dict[str, Any], response_content: Union[str, Dict[str, Any]], config: Dict[str, Any]):
+def log_raw_response(context: Dict[str, Any], response_content: Union[str, Dict[str, Any], BaseModel, Any], config: Dict[str, Any]):
     """
     Safely record the original response of the model to a file before parsing it.
     """
@@ -142,7 +144,7 @@ def log_raw_response(context: Dict[str, Any], response_content: Union[str, Dict[
         return
     
     model_id = config['model_id'].replace("/", "_")
-    log_dir = settings.BACKUP_DIR / model_id
+    log_dir = Path(settings.BACKUP_DIR) / model_id
 
     try:
         os.makedirs(log_dir, exist_ok=True)
@@ -154,14 +156,33 @@ def log_raw_response(context: Dict[str, Any], response_content: Union[str, Dict[
     
         # Check type of response_content and convert to string if it's a dictionary
     serialized_response_content: str
-    if isinstance(response_content, dict):
-        try:
+    try:
+        if isinstance(response_content, str):
+            serialized_response_content = response_content
+        elif isinstance(response_content, BaseModel):
+            # Pydantic BaseModel objects have .model_dump_json()
+            serialized_response_content = response_content.model_dump_json()
+        elif hasattr(response_content, 'model_dump_json') and callable(getattr(response_content, 'model_dump_json')):
+            # For OpenAI objects
+            serialized_response_content = response_content.model_dump_json()
+        elif hasattr(response_content, 'to_json') and callable(getattr(response_content, 'to_json')):
+            # For Anthropic objects (which have .to_json())
+            serialized_response_content = response_content.to_json()
+        elif hasattr(response_content, 'to_dict') and callable(getattr(response_content, 'to_dict')):
+            # For Google Gemini objects (which have .to_dict())
+            serialized_response_content = json.dumps(response_content.to_dict(), ensure_ascii=False)
+        elif isinstance(response_content, XaiResponse): # Use the imported XaiResponse type
+            serialized_response_content = response_content.content # Grok's raw JSON is in .content
+        elif isinstance(response_content, dict):
             serialized_response_content = json.dumps(response_content, ensure_ascii=False)
-        except TypeError as e:
-            logger.critical(f"CRITICAL WARNING: Failed to JSON serialize dictionary response: {e}. Data: {str(response_content)[:200]}")
+        else:
+            # Fallback for any other unhandled object types
+            logger.warning(f"Unhandled response_content type for logging: {type(response_content)}. Attempting str conversion.")
             serialized_response_content = str(response_content) # Fallback to string representation
-    else: # Assume it's already a string
-        serialized_response_content = response_content
+
+    except Exception as e:
+        logger.critical(f"CRITICAL WARNING: Failed to serialize response_content for logging: {e}. Type: {type(response_content)}")
+        serialized_response_content = f"ERROR_SERIALIZING_RESPONSE: {str(e)} - Original Type: {type(response_content)}"
 
     log_entry = {
         "qid": context.get("QID"),
