@@ -5,11 +5,10 @@ import json
 import re
 import ast
 from typing import Any
-from bert_score import score as bert_scorer
 from configs import settings, prompts
 import logging
 from src.dataset_loader import get_reference_counts
-from src import model_caller    # Required for calling the Judge LLM
+from src import model_caller, utils    # Required for calling the Judge LLM
 from functools import lru_cache
 
 import logging
@@ -236,7 +235,7 @@ Reference Answer: {answer_info.get('answer')}
         logging.debug(f"response_text: {response}")
         
         try:
-            response_json = json.loads(response)
+            response_json = utils.parse_model_json_output(response)
             res_eval = response_json.get('question', {})
             coherence = res_eval.get('coherence', False)
             rpg = res_eval.get('rpg', False)

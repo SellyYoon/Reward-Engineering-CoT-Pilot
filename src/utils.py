@@ -2,6 +2,7 @@
 # A collection of utility functions for the experiment.
 
 import json
+import random
 import re
 import time
 import os
@@ -9,11 +10,12 @@ import shutil
 import subprocess
 import logging
 import sys
+import httpx
 import torch
 from pathlib import Path
 from datetime import datetime, timezone
 from functools import wraps
-from typing import Any, Dict, Union
+from typing import Any, Dict, Union, Callable
 from xai_sdk.chat import Response as XaiResponse
 from configs import settings, prompts
 from pydantic import BaseModel
@@ -56,61 +58,92 @@ def get_utc_timestamp() -> str:
     """Returns the current timestamp in UTC ISO 8601 format."""
     return datetime.now(timezone.utc).isoformat()
 
-def extract_fields_manually(response_text: str) -> dict:
+def extract_fields_manually(response_content: str) -> dict:
     """
     A fallback function that extracts key fields using regex when full JSON parsing fails.
     This is the last resort to salvage data from a badly malformed response.
     """
-    output = {}
-    
-    # Try to extract pred_answer from various possible patterns
-    patterns = [
-        r'["\']pred_answer["\']\s*:\s*["\'](.*?)["\']',
-        r'Pred_answer:\s*(.*)',
-        r'Answer:\s*(.*)'
-    ]
-    for pattern in patterns:
-        match = re.search(pattern, response_text, re.DOTALL | re.IGNORECASE)
-        if match:
-            output["pred_answer"] = match.group(1).strip()
-            break
-
-    # Extract pseudocode
-    pseudo_match = re.search(r'["\']pred_pseudocode["\']\s*:\s*["\'](.*?)["\']', response_text, re.DOTALL)
-    if pseudo_match:
-        output["pred_pseudocode"] = pseudo_match.group(1).strip().replace('\n', '\\n')
-
-    # Extract numerical counts
-    for key in ["loop_count", "branch_count", "variable_count"]:
-        match = re.search(r'["\']?' + key + r'["\']?\s*:\s*(\d+)', response_text)
-        if match:
-            output[key] = int(match.group(1))
-
-    # If pred_answer is still missing, mark it as an extraction failure.
-    if "pred_answer" not in output:
-        output["error"] = "Failed to parse JSON and could not extract fields manually."
-        output["pred_answer"] = f"Extraction failed. Raw response: {response_text[:150]}..."
+    if not isinstance(response_content, str):
+        return {}
         
-    return output
+    data = {}
 
-def parse_model_json_output(response_text: str) -> dict:
+    # Regular expression pattern helper functions
+    def extract_value(key, pattern, default=None, is_bool=False, is_numeric=False, is_list=False):
+        match = re.search(f'["\']{key}["\']\\s*:\\s*({pattern})', response_content, re.DOTALL)
+        if not match:
+            return default
+        
+        val = match.group(1).strip()
+
+        if is_bool:
+            return 'true' in val.lower()
+        if is_numeric:
+            numeric_val = re.search(r'\d+', val)
+            return int(numeric_val.group(0)) if numeric_val else default
+        if is_list:
+            items_str = val.strip('[]').strip()
+            items = [item.strip().strip('"\'') for item in items_str.split(',') if item.strip()]
+            return items
+            
+        # 일반 텍스트 값은 앞뒤 따옴표와 공백 제거
+        return val.strip().strip('"\'')
+
+    # --- 1. Solver model field extraction ---
+    data['pred_answer'] = extract_value('pred_answer', '".*?"')
+    data['pred_reasoning_steps'] = extract_value('pred_reasoning_steps', r'\[.*?\]', default=[], is_list=True)
+    data['pred_pseudocode'] = extract_value('pred_pseudocode', '".*?"')
+    data['pred_loop_count'] = extract_value('pred_loop_count', r'\d+', default=0, is_numeric=True)
+    data['pred_branch_count'] = extract_value('pred_branch_count', r'\d+', default=0, is_numeric=True)
+    data['pred_variable_count'] = extract_value('pred_variable_count', r'\d+', default=0, is_numeric=True)
+
+    # --- 2. Eval model field extraction ---
+    data['coherence'] = extract_value('coherence', 'true|false', default=False, is_bool=True)
+    data['rpg'] = extract_value('rpg', 'true|false', default=False, is_bool=True)
+    data['eval_comment'] = extract_value('eval_comment', '".*?"')
+    
+    # --- 3. Handling nested ‘whw’ and ‘question’ objects ---
+    whw_block = extract_value('whw_description', r'\{.*?\}', default="{}")
+    whw_data = {
+        'why': extract_value('why', '".*?"', default=""),
+        'how': extract_value('how', '".*?"', default=""),
+        'which': extract_value('which', '".*?"', default="")
+    }
+
+    if whw_block:
+         whw_data['why'] = extract_value('why', '".*?"', default="") or whw_data['why']
+         whw_data['how'] = extract_value('how', '".*?"', default="") or whw_data['how']
+         whw_data['which'] = extract_value('which', '".*?"', default="") or whw_data['which']
+
+    if any(whw_data.values()):
+        data['whw_description'] = whw_data
+    
+    return {k: v for k, v in data.items() if v is not None}
+
+def parse_model_json_output(response_content: str) -> dict:
     """
     Safely parses a JSON object from a model's raw text output by attempting a series of cleaning steps.
     """
     
+    if isinstance(response_content, dict):
+        return {str(k).strip(): v for k, v in response_content.items()}
+    if not isinstance(response_content, str):
+        logger.warning(f"Since the input value is not a string (type: {type(response_content)}), an empty dictionary is returned.")
+        return {}
+    
     # Step 1: Isolate the most likely JSON string
-    json_str = response_text
-    match = re.search(r"```json\s*(\{.*?\})\s*```", response_text, re.DOTALL)
+    json_str = response_content
+    match = re.search(r"```json\s*(\{.*?\})\s*```", response_content, re.DOTALL)
     if match:
         json_str = match.group(1)
     else:
-        start = response_text.find('{')
-        end = response_text.rfind('}')
+        start = response_content.find('{')
+        end = response_content.rfind('}')
         if start != -1 and end != -1 and end > start:
-            json_str = response_text[start:end+1]
+            json_str = response_content[start:end+1]
         else:
             # If no JSON structure is found at all, go straight to manual extraction
-            return extract_fields_manually(response_text)
+            return extract_fields_manually(response_content)
 
     # Step 2: Clean up common structural errors within the JSON string
     
@@ -133,7 +166,7 @@ def parse_model_json_output(response_text: str) -> dict:
     except json.JSONDecodeError as e:
         # Step 4: If parsing still fails, fall back to manual regex extraction
         logger.warning(f"JSON parsing failed after cleaning: {e}. Falling back to manual extraction.")
-        return extract_fields_manually(response_text)
+        return extract_fields_manually(response_content)
         
 def log_raw_response(context: Dict[str, Any], response_content: Union[str, Dict[str, Any], BaseModel, Any], config: Dict[str, Any]):
     """
@@ -296,3 +329,62 @@ def applicant_system_prompt(condition: str):
 		return (prompts.SESSION_START_PROMPT + "\n\n" + prompts.CORE_TASK_PROMPT + "\n\n")
 	else:
 		return (prompts.SESSION_START_PROMPT + "\n\n" + prompts.CORE_TASK_WHW_PROMPT + "\n\n")
+
+def retry_with_backoff(
+    api_call_func: Callable[..., Any],
+    api_kwargs: Dict[str, Any],
+    max_retries: int = 5,
+    initial_delay: float = 1.0,
+    backoff_factor: float = 2.0,
+    max_delay: float = 60.0
+) -> str:
+    """
+    Receives an API call function and retries it using an exponential backoff mechanism until it succeeds.
+    Args:
+    api_call_func: The function that actually calls the API (e.g., _call_openai_api).
+    api_kwargs: A dictionary of arguments to be passed to api_call_func.
+            
+    max_retries: Maximum number of retries.
+            initial_delay: Wait time (in seconds) after the first failure.
+    backoff_factor: Value multiplied by the wait time for each retry.
+    Returns:
+    API response string on success, JSON string containing the error on final failure.
+    """
+    model_type = api_kwargs.get('config', {}).get('type', 'unknown_type')
+    model_id = api_kwargs.get('config', {}).get('model_id', 'unknown_model')
+
+    for attempt in range(max_retries):
+        try:
+            result = api_call_func(**api_kwargs)
+            if result and isinstance(result, str):
+                return result
+            raise ValueError("API returned an empty but non-error response.")
+        except httpx.HTTPStatusError as e:
+            # Retry only on 5xx server errors or 408, 429 rate limit errors
+            if e.response.status_code >= 500 or e.response.status_code in [408, 429]:
+                if attempt < max_retries - 1:
+                    delay = min(max_delay, initial_delay * (backoff_factor ** attempt))
+                    jitter = random.uniform(0, delay * 0.1) # Add 10% jitter
+                    sleep_time = delay + jitter
+                    logging.warning(f"TYPE: {model_type}, ID: {model_id} API: Status {e.response.status_code}. Retrying in {sleep_time:.2f} seconds... (Attempt {attempt+1}/{max_retries})")
+                    time.sleep(sleep_time)
+                else:
+                    logging.critical(f"Error calling {model_type} for model {model_id}: Max retries exceeded. {e}")
+                    return json.dumps({"error": f"TYPE: {model_type}, ID: {model_id} API call failed after {max_retries} retries: {str(e)}"})
+            else:
+                # Other HTTP errors (e.g., 4xx client errors) are not retried
+                logging.error(f"TYPE: {model_type}, ID: {model_id} API: Client error that cannot be retried (HTTP Status: {e.response.status_code}). Please check your request. Error: {e}")
+                return json.dumps({"error": f"TYPE: {model_type}, ID: {model_id} API call failed: {str(e)}"})
+            
+        except Exception as e:
+            logger.error(f"'TYPE: {model_type}, ID: {model_id}' API call failed (attempted {attempt + 1}/{max_retries}): {e}")
+            
+            if attempt + 1 == max_retries:
+                logger.critical(f"The 'TYPE: {model_type}, ID: {model_id}' API failed all retries.")
+                return json.dumps({"error": f"API call failed for TYPE: {model_type}, ID: {model_id} after {max_retries} retries."})
+            
+            delay = min(max_delay, initial_delay * (backoff_factor ** attempt))
+            logger.info(f"{delay:.1f} seconds later, we will try again...")
+            time.sleep(delay)
+            
+    return json.dumps({f"error": "TYPE: {model_type}, ID: {model_id} API Exhausted all retries."})

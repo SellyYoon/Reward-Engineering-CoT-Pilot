@@ -194,6 +194,8 @@ def call_grok_api(
     """
     Calls xAI Grok API and returns the response text.
     """
+    
+    
     try:
         temperature = temperature if temperature is not None else settings.TEMPERATURE
         model_id = eval_model_id if eval_model_id else config.get('model_id')
@@ -323,6 +325,14 @@ def call_local_model(
             logging.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
             return "ERROR: Local model inference failed."
 
+API_DISPATCHER = {
+    "api_openai": call_openai_api,
+    "api_anthropic": call_anthropic_api,
+    "api_xai": call_grok_api,
+    "api_google": call_gemini_api,
+    "local": call_local_model
+}
+
 def dispatch_solver_call(
     config: dict[str, Any],
     system_prompt: str,
@@ -347,59 +357,42 @@ def dispatch_solver_call(
         raise ValueError(f"Solver model with sbx_id '{sbx_id}' not found in settings.")
 
     model_type = model_config["type"]
-    
-    # Call the appropriate function depending on the model type
-    if model_type == "api_openai":
-        return call_openai_api(
-            config=config,
-            system_prompt=system_prompt,
-            user_prompt=user_prompt,
-            temperature=temperature,
-            context=log_context
-        )
-    elif model_type == "api_anthropic":
-        return call_anthropic_api(
-            config=config,
-            system_prompt=system_prompt,
-            user_prompt=user_prompt,
-            temperature=temperature,
-            context=log_context
-        )
-    elif model_type == "api_xai":
-        if output_schema:
-            final_schema = output_schema
-        elif config['condition'] in ('A', 'C'):
-            final_schema = schemas.SimpleTaskOutput
-        else: # Conditions 'B', 'D'
-            final_schema = schemas.TaskOutput
-        return call_grok_api(
-            config=config,
-            system_prompt=system_prompt,
-            user_prompt=user_prompt,
-            temperature=temperature,
-            context=log_context,
-            output_schema=final_schema
-        )
-    elif model_type == "api_google":
-        return call_gemini_api(
-            config=config,
-            system_prompt=system_prompt,
-            user_prompt=user_prompt,
-            temperature=temperature,
-            context=log_context
-        )
-    elif model_type == "local":
-        if not local_models or model_id not in local_models:
-            raise ValueError(f"Local model {model_id} was not pre-loaded.")
+    target_api_func = API_DISPATCHER.get(model_type)
+
+    if not target_api_func:
+        error_msg = f"'The API call function corresponding to {model_type} cannot be found."
+        logger.error(error_msg)
+        return json.dumps({"error": error_msg})
+
+    # 1. Prepare a dictionary of common arguments to be passed to API functions.
+    api_kwargs = {
+        "config": config,
+        "system_prompt": system_prompt,
+        "user_prompt": user_prompt,
+        "temperature": settings.TEMPERATURE,
+        "context": log_context or {}
+    }
+
+    # 2. Add ‘special’ arguments according to model type
+    if model_type == "api_xai":
+        # Grok-specific: Logic that determines different schemas based on conditions
+        if config.get('condition') in ('A', 'C'):
+            api_kwargs['output_schema'] = schemas.SimpleTaskOutput
+        else:
+            api_kwargs['output_schema'] = schemas.TaskOutput
             
+    elif model_type == "local":
+        # Local model only: Pass a preloaded model and tokenizer object
+        model_id = config['model_id']
+        if not local_models or model_id not in local_models:
+            raise ValueError(f"The preloaded local model ({model_id}) cannot be found.")
+        
         loaded_model_obj = local_models[model_id]
-        model = loaded_model_obj["model"]
-        tokenizer = loaded_model_obj["tokenizer"]
-        return call_local_model(
-            model=model, 
-            config=config,
-            tokenizer=tokenizer,
-            system_prompt=system_prompt,
-            user_prompt=user_prompt,
-            context=log_context
-        )
+        api_kwargs["model"] = loaded_model_obj["model"]
+        api_kwargs["tokenizer"] = loaded_model_obj["tokenizer"]
+
+    # 3. Call the retry function of utils to execute the final execution.
+    return utils.retry_with_backoff(
+        api_call_func=target_api_func,
+        api_kwargs=api_kwargs
+    )
