@@ -29,28 +29,64 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # --- Decorator for Retry Logic ---
+def retry_with_backoff(
+    api_call_func: Callable[..., Any],
+    api_kwargs: Dict[str, Any],
+    max_retries: int = 5,
+    initial_delay: float = 1.0,
+    backoff_factor: float = 2.0,
+    max_delay: float = 60.0
+) -> str:
+    """
+    Receives an API call function and retries it using an exponential backoff mechanism until it succeeds.
+    Args:
+    api_call_func: The function that actually calls the API (e.g., _call_openai_api).
+    api_kwargs: A dictionary of arguments to be passed to api_call_func.
+            
+    max_retries: Maximum number of retries.
+            initial_delay: Wait time (in seconds) after the first failure.
+    backoff_factor: Value multiplied by the wait time for each retry.
+    Returns:
+    API response string on success, JSON string containing the error on final failure.
+    """
+    model_type = api_kwargs.get('config', {}).get('type', 'unknown_type')
+    model_id = api_kwargs.get('config', {}).get('model_id', 'unknown_model')
 
-def retry(retries=3, delay=5):
-    """
-    A decorator to retry a function call upon failure.
-    Usage:
-    @retry(retries=3, delay=5)
-    def my_api_call():
-        # ...
-    """
-    def decorator(func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            for i in range(retries):
-                try:
-                    return func(*args, **kwargs)
-                except Exception as e:
-                    logger.warning(f"Call to {func.__name__} failed. Retrying in {delay}s... ({i+1}/{retries})")
-                    logger.error(f"Error: {e}")
-                    time.sleep(delay)
-            raise ConnectionError(f"Function {func.__name__} failed after {retries} retries.")
-        return wrapper
-    return decorator
+    for attempt in range(max_retries):
+        try:
+            result = api_call_func(**api_kwargs)
+            if result and isinstance(result, str):
+                return result
+            raise ValueError("API returned an empty but non-error response.")
+        except httpx.HTTPStatusError as e:
+            # Retry only on 5xx server errors or 408, 429 rate limit errors
+            if e.response.status_code >= 500 or e.response.status_code in [408, 429]:
+                if attempt < max_retries - 1:
+                    delay = min(max_delay, initial_delay * (backoff_factor ** attempt))
+                    jitter = random.uniform(0, delay * 0.1) # Add 10% jitter
+                    sleep_time = delay + jitter
+                    logging.warning(f"TYPE: {model_type}, ID: {model_id} API: Status {e.response.status_code}. Retrying in {sleep_time:.2f} seconds... (Attempt {attempt+1}/{max_retries})")
+                    time.sleep(sleep_time)
+                else:
+                    logging.critical(f"Error calling {model_type} for model {model_id}: Max retries exceeded. {e}")
+                    return json.dumps({"error": f"TYPE: {model_type}, ID: {model_id} API call failed after {max_retries} retries: {str(e)}"})
+            else:
+                # Other HTTP errors (e.g., 4xx client errors) are not retried
+                logging.error(f"TYPE: {model_type}, ID: {model_id} API: Client error that cannot be retried (HTTP Status: {e.response.status_code}). Please check your request. Error: {e}")
+                return json.dumps({"error": f"TYPE: {model_type}, ID: {model_id} API call failed: {str(e)}"})
+            
+        except Exception as e:
+            logger.error(f"'TYPE: {model_type}, ID: {model_id}' API call failed (attempted {attempt + 1}/{max_retries}): {e}")
+            
+            if attempt + 1 == max_retries:
+                logger.critical(f"The 'TYPE: {model_type}, ID: {model_id}' API failed all retries.")
+                return json.dumps({"error": f"API call failed for TYPE: {model_type}, ID: {model_id} after {max_retries} retries."})
+            
+            delay = min(max_delay, initial_delay * (backoff_factor ** attempt))
+            logger.info(f"{delay:.1f} seconds later, we will try again...")
+            time.sleep(delay)
+            
+    return json.dumps({f"error": "TYPE: {model_type}, ID: {model_id} API Exhausted all retries."})
 
 # --- Utility Functions ---
 
@@ -329,62 +365,3 @@ def applicant_system_prompt(condition: str):
 		return (prompts.SESSION_START_PROMPT + "\n\n" + prompts.CORE_TASK_PROMPT + "\n\n")
 	else:
 		return (prompts.SESSION_START_PROMPT + "\n\n" + prompts.CORE_TASK_WHW_PROMPT + "\n\n")
-
-def retry_with_backoff(
-    api_call_func: Callable[..., Any],
-    api_kwargs: Dict[str, Any],
-    max_retries: int = 5,
-    initial_delay: float = 1.0,
-    backoff_factor: float = 2.0,
-    max_delay: float = 60.0
-) -> str:
-    """
-    Receives an API call function and retries it using an exponential backoff mechanism until it succeeds.
-    Args:
-    api_call_func: The function that actually calls the API (e.g., _call_openai_api).
-    api_kwargs: A dictionary of arguments to be passed to api_call_func.
-            
-    max_retries: Maximum number of retries.
-            initial_delay: Wait time (in seconds) after the first failure.
-    backoff_factor: Value multiplied by the wait time for each retry.
-    Returns:
-    API response string on success, JSON string containing the error on final failure.
-    """
-    model_type = api_kwargs.get('config', {}).get('type', 'unknown_type')
-    model_id = api_kwargs.get('config', {}).get('model_id', 'unknown_model')
-
-    for attempt in range(max_retries):
-        try:
-            result = api_call_func(**api_kwargs)
-            if result and isinstance(result, str):
-                return result
-            raise ValueError("API returned an empty but non-error response.")
-        except httpx.HTTPStatusError as e:
-            # Retry only on 5xx server errors or 408, 429 rate limit errors
-            if e.response.status_code >= 500 or e.response.status_code in [408, 429]:
-                if attempt < max_retries - 1:
-                    delay = min(max_delay, initial_delay * (backoff_factor ** attempt))
-                    jitter = random.uniform(0, delay * 0.1) # Add 10% jitter
-                    sleep_time = delay + jitter
-                    logging.warning(f"TYPE: {model_type}, ID: {model_id} API: Status {e.response.status_code}. Retrying in {sleep_time:.2f} seconds... (Attempt {attempt+1}/{max_retries})")
-                    time.sleep(sleep_time)
-                else:
-                    logging.critical(f"Error calling {model_type} for model {model_id}: Max retries exceeded. {e}")
-                    return json.dumps({"error": f"TYPE: {model_type}, ID: {model_id} API call failed after {max_retries} retries: {str(e)}"})
-            else:
-                # Other HTTP errors (e.g., 4xx client errors) are not retried
-                logging.error(f"TYPE: {model_type}, ID: {model_id} API: Client error that cannot be retried (HTTP Status: {e.response.status_code}). Please check your request. Error: {e}")
-                return json.dumps({"error": f"TYPE: {model_type}, ID: {model_id} API call failed: {str(e)}"})
-            
-        except Exception as e:
-            logger.error(f"'TYPE: {model_type}, ID: {model_id}' API call failed (attempted {attempt + 1}/{max_retries}): {e}")
-            
-            if attempt + 1 == max_retries:
-                logger.critical(f"The 'TYPE: {model_type}, ID: {model_id}' API failed all retries.")
-                return json.dumps({"error": f"API call failed for TYPE: {model_type}, ID: {model_id} after {max_retries} retries."})
-            
-            delay = min(max_delay, initial_delay * (backoff_factor ** attempt))
-            logger.info(f"{delay:.1f} seconds later, we will try again...")
-            time.sleep(delay)
-            
-    return json.dumps({f"error": "TYPE: {model_type}, ID: {model_id} API Exhausted all retries."})
