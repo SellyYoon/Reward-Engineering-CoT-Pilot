@@ -16,6 +16,10 @@ from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
 from functools import lru_cache
 from configs import settings, schemas
 from src import utils
+import time
+import random
+import httpx
+
 
 import logging
 import sys
@@ -123,36 +127,60 @@ def call_anthropic_api(
     context: Optional[dict] = None
 ) -> str:
     """Calls the Anthropic API and returns the response text."""
-    try:
-        temperature = temperature if temperature else settings.TEMPERATURE
-        model_id = eval_model_id if eval_model_id else config.get('model_id')
-        response = anthropic_client.messages.create(
-            model=model_id,
-            system=system_prompt,
-            messages=[
-                {"role": "user", "content": user_prompt},
-                {"role": "assistant", "content": "{"}
-            ],
-            temperature=temperature,
-            max_tokens=settings.MAX_NEW_TOKENS,
-            top_p=settings.TOP_P,
-            top_k=settings.TOP_K
-        )
+    
+    max_retries = 5
+    initial_delay = 1.0 # seconds
+    backoff_factor = 2.0
+    max_delay = 60.0 # seconds
 
-        log_context = context or {}
-        log_context['model_id'] = model_id
-        utils.log_raw_response(log_context, response, config)
+    for i in range(max_retries):
+        try:
+            temperature = temperature if temperature else settings.TEMPERATURE
+            model_id = eval_model_id if eval_model_id else config.get('model_id')
+            response = anthropic_client.messages.create(
+                model=model_id,
+                system=system_prompt,
+                messages=[
+                    {"role": "user", "content": user_prompt},
+                    {"role": "assistant", "content": "{"}
+                ],
+                temperature=temperature,
+                max_tokens=settings.MAX_NEW_TOKENS,
+                top_p=settings.TOP_P,
+                top_k=settings.TOP_K
+            )
 
-        if response.content and response.content[0].text:
-            return response.content[0].text
-        else:
-            logging.error(f"Anthropic API response content is empty or malformed for model {model_id}.")
-            return json.dumps({"error": "Empty or malformed Anthropic response content"})
-        
-    except Exception as e:
-        model_id_for_error = eval_model_id or config.get('model_id', 'unknown')
-        logging.error(f"Error calling Anthropic API for model {model_id_for_error}: {e}")
-        return logging.error("ERROR: Anthropic API call failed.")
+            log_context = context or {}
+            log_context['model_id'] = model_id
+            utils.log_raw_response(log_context, response, config)
+
+            if response.content and response.content[0].text:
+                return response.content[0].text
+            else:
+                logging.error(f"Anthropic API response content is empty or malformed for model {model_id}.")
+                return json.dumps({"error": "Empty or malformed Anthropic response content"})
+            
+        except httpx.HTTPStatusError as e:
+            # Retry only on 5xx server errors or 429 rate limit errors
+            if e.response.status_code >= 500 or e.response.status_code == 429:
+                if i < max_retries - 1:
+                    delay = min(max_delay, initial_delay * (backoff_factor ** i))
+                    jitter = random.uniform(0, delay * 0.1) # Add 10% jitter
+                    sleep_time = delay + jitter
+                    logging.warning(f"Anthropic API: Status {e.response.status_code}. Retrying in {sleep_time:.2f} seconds... (Attempt {i+1}/{max_retries})")
+                    time.sleep(sleep_time)
+                else:
+                    logging.error(f"Error calling Anthropic API for model {model_id}: Max retries exceeded. {e}")
+                    return json.dumps({"error": f"Anthropic API call failed after {max_retries} retries: {str(e)}"})
+            else:
+                # Other HTTP errors (e.g., 4xx client errors) are not retried
+                logging.error(f"Error calling Anthropic API for model {model_id}: Non-retryable HTTP error. {e}")
+                return json.dumps({"error": f"Anthropic API call failed: {str(e)}"})
+            
+        except Exception as e:
+            model_id_for_error = eval_model_id or config.get('model_id', 'unknown')
+            logging.error(f"Error calling Anthropic API for model {model_id_for_error}: {e}")
+            return logging.error("ERROR: Anthropic API call failed.")
 
 def call_grok_api(    
     config: dict[str, Any],     

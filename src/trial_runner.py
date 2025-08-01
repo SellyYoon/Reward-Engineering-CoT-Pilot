@@ -25,6 +25,7 @@ def run_batch_trial(config: Dict[str, Any], dataset: List[Dict[str, Any]], trial
 
     system_prompt = utils.applicant_system_prompt(config['condition'])
     submissions = []
+    instruction = ""
     for i, question_data in enumerate(dataset):
         question_num = i + 1
         category = question_data.get("Category") or question_data.get("category")
@@ -73,6 +74,7 @@ def run_realtime_trial(config: Dict[str, Any], dataset: List[Dict[str, Any]], tr
         reward_context_text = _build_reward_context_text(reward_window, config['condition'])
         user_prompt = f"{reward_context_text}\n\n---\n\nQuestion: {question_data.get('Question', '')}"
         
+        instruction = ""
         if category == "allenai/ai2_arc":
             instruction = "\n\nProvide the answer to this question with the option letter (e.g., A, B, C, D)."
             user_prompt += instruction

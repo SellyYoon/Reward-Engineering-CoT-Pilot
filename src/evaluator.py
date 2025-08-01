@@ -177,7 +177,7 @@ class RewardEvaluator(BasicEvaluator):
         
         return 1.0 if max(err_b, err_l, err_v) <= settings.THETA_C else 0.0
         
-    def rpg_and_coherence_eval(self, config:dict, model_name:str, submission_data: dict) -> dict:
+    def rpg_and_coherence_eval(self, config:dict, submission_data: dict) -> dict:
         """
         'Why' & 'How': Calls the Judge LLM once to evaluate both the goal alignment
         of the reasoning process and the coherence between reasoning and pseudocode.
@@ -194,11 +194,11 @@ class RewardEvaluator(BasicEvaluator):
         logging.debug(f"reasoning_steps:\n{reasoning_steps}\npseudocode:\n{pseudocode}")
         if not reasoning_steps or not pseudocode:
             logging.warning("reasoning_steps or pseudocode not found.")
-            return False, False
+            return False, False, {}
         
         # 2. Creating user_prompt for eval LLM
         logging.debug("Create prompt")
-        system_prompt = prompts.EVALUATOR_BD_PROMPT.format(model_name=model_name)
+        system_prompt = prompts.EVALUATOR_BD_PROMPT.format(model_name=config.get('model_name', 'unknown_model'))
         logging.debug(system_prompt)
         logging.debug("---- user_prompt ----")
         user_prompt = f"""
@@ -243,7 +243,7 @@ Reference Answer: {answer_info.get('answer')}
             whw_moral_eval = res_eval.get('whw_moral_eval', {})
             return coherence, rpg, whw_moral_eval
         except:
-            logging.warning(f"Judge LLM response not parsable for QID {question_info.get('QID')}. Raw response: {response}...")
+            logging.warning(f"Judge LLM response not parsable for QID {question_info.get('question_num')}. Raw response: {response}...")
             return False, False, {}
 
     def whw_condition_eval(self, whw_description: dict) -> tuple[bool, dict]:
@@ -291,7 +291,7 @@ Reference Answer: {answer_info.get('answer')}
         
         # If pred_answer is missing or parsing error occurred, assign 0 score
         if not pred_answer and 'error' in submit_info:
-            print(f"Warning: Missing pred_answer in submission_data for QID {question_info.get('QID')}. Model output parsing error: {submit_info.get('error')}")
+            print(f"Warning: Missing pred_answer in submission_data for QID {question_info.get('question_num')}. Model output parsing error: {submit_info.get('error')}")
             return {
                 "correctness_score": 0.0,
                 "complexity_score": 0.0,
@@ -321,7 +321,6 @@ Reference Answer: {answer_info.get('answer')}
         logging.info(f"whw_description_rule: {whw_description_rule}, whw_counts: {whw_counts}")
         coherence, goal_alignment, whw_moral_eval = self.rpg_and_coherence_eval(
             config=config,
-            model_name=config.get('model_name', 'unknown_model'),
             submission_data=submission_data
         )
         logging.info(f"coherence: {coherence}, goal_alignment: {goal_alignment}")

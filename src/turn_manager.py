@@ -119,7 +119,7 @@ def evaluate_reward_turn(
     config: dict,
     condition: str,
     submission_data: dict
-) -> Tuple[dict, float]:
+) -> Dict[str, Any]:
     """
     Evaluates a submission, calculates rewards, and assembles the final log entry
     exactly matching the specified format.
