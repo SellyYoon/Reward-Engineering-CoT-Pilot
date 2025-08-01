@@ -103,9 +103,6 @@ def call_openai_api(
             top_p=settings.TOP_P,
             response_format={"type": "json_object"},
         )
-        log_context = context or {}
-        log_context['model_id'] = model_id
-        utils.log_raw_response(log_context, response, config)
         
         # Return the actual content for the application's use.
         if response.choices and response.choices[0].message.content:
@@ -116,8 +113,14 @@ def call_openai_api(
     except Exception as e:
         model_id_for_error = eval_model_id or config.get('model_id', 'unknown')
         logging.error(f"Error calling OpenAI API for model {model_id_for_error}: {e}")
-        return logging.error("ERROR: OpenAI API call failed.")
-
+        return json.dumps({"error": "OpenAI API call failed", "message": str(e)})
+    
+    finally:
+        if response is not None:
+            log_context = context or {}
+            log_context['model_id'] = eval_model_id or config.get('model_id')
+            utils.log_raw_response(log_context, response, config)
+    
 def call_anthropic_api(
     config: dict[str, Any],
     system_prompt: str,
@@ -144,21 +147,22 @@ def call_anthropic_api(
             top_k=settings.TOP_K
         )
 
-        log_context = context or {}
-        log_context['model_id'] = model_id
-        utils.log_raw_response(log_context, response, config)
-
         if response.content and response.content[0].text:
             return response.content[0].text
         else:
-            logging.error(f"Anthropic API response content is empty or malformed for model {model_id}.")
-            return json.dumps({"error": "Empty or malformed Anthropic response content"})
-        
+            raise ValueError("Anthropic API response content is empty or malformed.")
+            
     except Exception as e:
         model_id_for_error = eval_model_id or config.get('model_id', 'unknown')
         logging.error(f"Error calling Anthropic API for model {model_id_for_error}: {e}")
-        return logging.error("ERROR: Anthropic API call failed.")
-
+        return json.dumps({"error": "Anthropic API call failed", "message": str(e)})
+        
+    finally:
+        if response is not None:
+            log_context = context or {}
+            log_context['model_id'] = eval_model_id or config.get('model_id')
+            utils.log_raw_response(log_context, response, config)
+            
 def call_grok_api(    
     config: dict[str, Any],     
     system_prompt: str,
@@ -186,13 +190,22 @@ def call_grok_api(
         log_context['model_id'] = model_id
         utils.log_raw_response(log_context, response, config)
 
-        return parsed_object.model_dump_json()
-
+        if parsed_object:
+            return parsed_object.model_dump_json()
+        else:
+            raise ValueError("Grok API response content is empty or malformed.")
+            
     except Exception as e:
         model_id_for_error = eval_model_id or config.get('model_id', 'unknown')
         logging.error(f"Error calling Grok API for model {model_id_for_error}: {e}")
-        return logging.error("ERROR: Grok API call failed.")
-    
+        return json.dumps({"error": "Grok API call failed", "message": str(e)})
+        
+    finally:
+        if response is not None:
+            log_context = context or {}
+            log_context['model_id'] = eval_model_id or config.get('model_id')
+            utils.log_raw_response(log_context, response, config)
+            
 def call_gemini_api(
     config: dict[str, Any],
     system_prompt: str,
@@ -222,13 +235,22 @@ def call_gemini_api(
         log_context = context or {}
         log_context['model_id'] = model_id
         utils.log_raw_response(log_context, response, config)
-        
-        response_text = response.text
-        return response_text
+    
+        if response and response.text:
+            return response.text
+        else:
+            raise ValueError("Anthropic API response content is empty or malformed.")
+            
     except Exception as e:
         model_id_for_error = eval_model_id or config.get('model_id', 'unknown')
         logging.error(f"Error calling Google Gemini API for model {model_id_for_error}: {e}")
         return json.dumps({"error": "Google Gemini API call failed", "message": str(e)})
+        
+    finally:
+        if response is not None:
+            log_context = context or {}
+            log_context['model_id'] = eval_model_id or config.get('model_id')
+            utils.log_raw_response(log_context, response, config)
     
 def call_local_model(
     model,

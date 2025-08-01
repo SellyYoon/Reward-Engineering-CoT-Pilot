@@ -56,13 +56,14 @@ class TrialLogger:
 
     def _get_log_path(self, role: str) -> str:
         """Generates a log file path based on the user-defined convention."""
+        run_id = self.config['run_id']
         session_id = self.config['session_id']
         sbx_id = self.config['sbx_id']
         model_id = self.config.get('model_id', 'unknown').replace("/", "_") # Sanitize name
         if role == 'events':
-            filename = f"{sbx_id}_{model_id}_{role}.jsonl"
+            filename = f"{run_id}_{sbx_id}_{model_id}_{role}.jsonl"
         else:
-            filename = f"{session_id}_{model_id}_{role}.jsonl"
+            filename = f"{run_id}_{session_id}_{model_id}_{role}.jsonl"
         return os.path.join(self.log_dir, filename)
 
     def _append_to_file(self, file_path: str, data: dict):

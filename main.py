@@ -17,10 +17,9 @@ except Exception as e:
 print("------------------- INSPECTION END -------------------")
 
 from configs import settings
-from src import model_caller
-from src import dataset_loader, trial_runner, session_manager
+from src import model_caller, dataset_loader, trial_runner, session_manager, utils, trial_runner
 from src.logger import MainLogger, TrialLogger
-from src import utils, trial_runner
+import secrets
 
 # 1. Container Global Logger
 sbx_id = os.getenv('SBX_ID', 'unknown')
@@ -28,12 +27,15 @@ model_id = os.getenv('MODEL_ID', 'unknown').replace("/", "_")
 container_name = f"{sbx_id}_{model_id}"
 log_file_path = settings.LOG_DIR / f"app_{container_name}_{datetime.utcnow().strftime('%Y%m%d')}.log"
 
+run_id = secrets.token_hex(3)  # ex: 'a4f2c1'
+logging.info(f"✅ New execution started. This run's unique ID is: [ {run_id} ]")
+    
 logging.basicConfig(
     level=logging.DEBUG,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
         logging.FileHandler(log_file_path, mode='a', encoding='utf-8'),
-        logging.StreamHandler(sys.stderr)          # stdout 대신 stderr 권장
+        logging.StreamHandler(sys.stderr)
     ],
     force=True
 )
@@ -122,6 +124,7 @@ def main():
         
         # Get all configuration for the current trial from the session manager.
         config = session_manager.next_session(sbx_id, model_id, split)
+        config['run_id'] = run_id
         
         # Create a dedicated logger instance for this specific trial.
         trial_logger = TrialLogger(config)

@@ -220,8 +220,8 @@ def log_raw_response(context: Dict[str, Any], response_content: Union[str, Dict[
     except OSError as e:
         logger.critical(f"CRITICAL WARNING: Failed to create log directory {log_dir}: {e}")
         return
-    timestamp = datetime.now().strftime('%Y%m%d%H')
-    log_path = log_dir / f"{config['session_id']}_{timestamp}_responses.jsonl"    
+    timestamp = datetime.now().strftime('%Y%m%d')
+    log_path = log_dir / f"{config['run_id']}_{config['session_id']}_{timestamp}_responses.jsonl"    
     
         # Check type of response_content and convert to string if it's a dictionary
     serialized_response_content: str
