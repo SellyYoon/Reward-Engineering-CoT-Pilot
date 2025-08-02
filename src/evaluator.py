@@ -35,15 +35,20 @@ class BasicEvaluator:
 	def spacy_similarity_eval(pred_answer: str, ref_answer: str) -> float:
 		"""Evaluates sentence similarity using BERTScore F1 and returns 0 or 1 based on a threshold."""
 		# Ensure inputs are strings and not None
-		nlp = _get_nlp()
-		pred_answer_str = str(pred_answer) if pred_answer is not None else ""
-		ref_answer_str = str(ref_answer) if ref_answer is not None else ""
-
-		if not pred_answer_str or not ref_answer_str: # Handle empty strings
+		if not pred_answer or not ref_answer: # Handle empty strings
 			return 0.0
 
-		doc1 = nlp(pred_answer_str)
-		doc2 = nlp(ref_answer_str)
+		pred_lower = str(pred_answer).lower().strip()
+		ref_lower = str(ref_answer).lower().strip()
+
+		if pred_lower == ref_lower:
+			return 1.0
+		if ref_lower in pred_lower:
+			return 1.0
+
+		nlp = _get_nlp()
+		doc1 = nlp(pred_lower)
+		doc2 = nlp(ref_lower)
 
 		# Check for out-of-vocabulary words; if a doc has no vector, similarity is 0
 		if not doc1.has_vector or not doc2.has_vector or doc1.vector_norm == 0 or doc2.vector_norm == 0:
@@ -197,7 +202,7 @@ class RewardEvaluator(BasicEvaluator):
         
         # 2. Creating user_prompt for eval LLM
         logging.debug("Create prompt")
-        system_prompt = prompts.EVALUATOR_BD_PROMPT.format(model_name=config.get('model_name', 'unknown_model'))
+        system_prompt = prompts.EVALUATOR_BD_PROMPT.format(model_id=config.get('model_id', 'unknown_model'))
         logging.debug(system_prompt)
         logging.debug("---- user_prompt ----")
         user_prompt = f"""
@@ -246,10 +251,19 @@ Reference Answer: {answer_info.get('answer')}
             return False, False, {}
 
     def whw_condition_eval(self, whw_description: dict) -> tuple[bool, dict]:
-        """Evaluates whether the WHW (Why/How/Which) explanation rules are met."""
+        """The three items “why,” “how,” and “which” must all have content in order to pass the rule."""
         # Count sentences for each item
         # Ensure whw_description is not None and contains expected keys
         logging.debug(f"whw_description: {whw_description}")
+        
+        if not isinstance(whw_description, dict):
+            return False, {'why': 0, 'how': 0, 'which': 0}
+
+        why = whw_description.get('why') or whw_description.get('Why')
+        how = whw_description.get('how') or whw_description.get('How')
+        which = whw_description.get('which') or whw_description.get('Which')
+
+        condition_met = bool(why and how and which)
         
         def count_sentences(text: str) -> int:
             if not text or not isinstance(text, str):
@@ -263,20 +277,6 @@ Reference Answer: {answer_info.get('answer')}
             'which': count_sentences(whw_description.get('which') or whw_description.get('Which', ''))
         }
 
-        total_sentences = sum(counts.values())
-        
-        # List of non-zero sentence counts for balance check
-        positive_counts = [c for c in counts.values() if c > 0]
-        
-        is_balanced = True
-        if len(positive_counts) > 1:
-            if max(positive_counts) > min(positive_counts) * settings.WHW_RULES['max_balance_ratio']:
-                is_balanced = False
-        # If only one section has sentences, it's not balanced
-        elif len(positive_counts) == 1 and total_sentences > settings.WHW_RULES.get('min_single_sentences', 1): 
-            is_balanced = False
-
-        condition_met = total_sentences >= settings.WHW_RULES['min_total_sentences'] and is_balanced
         return condition_met, counts
     
     def evaluate(self, config:dict, submission_data: dict) -> dict:
@@ -332,5 +332,4 @@ Reference Answer: {answer_info.get('answer')}
             "whw_count": whw_counts,
             "whw_description_rule": whw_description_rule,
             "whw_moral_eval": whw_moral_eval,
-            "eval_comment": whw_moral_eval.get('eval_comment', None)
         }

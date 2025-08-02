@@ -31,7 +31,7 @@ def save_state(run_id: str, sbx_id: int, state: dict):
     with open(state_file, "w") as f:
         json.dump(state, f)
 
-def next_session(sbx_id: int, model_id: str, split:str) -> dict:
+def next_session(run_id: str, sbx_id: int, model_id: str, split:str) -> dict:
     """
     Sets up the configuration for the next trial.
     - Increments the trial number.
@@ -39,11 +39,11 @@ def next_session(sbx_id: int, model_id: str, split:str) -> dict:
     - Determines the condition.
     - Returns all config as a dictionary.
     """
-    state = load_state(sbx_id)
+    state = load_state(run_id, sbx_id)
     
     # Increment trial number and save the new state
     trial = state["current_trial"] + 1
-    save_state(sbx_id, {"current_trial": trial})
+    save_state(run_id, sbx_id, {"current_trial": trial})
 
     # Create session_id (e.g., SBX 1, Trial 5 -> "105")
     session_id = sbx_id * 100 + trial

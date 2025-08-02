@@ -148,7 +148,11 @@ def call_anthropic_api(
         )
 
         if response.content and response.content[0].text:
-            return response.content[0].text
+            responese_content = response.content[0].text
+            if not responese_content.strip().startswith('{'):
+                logger.warning("The ‘{’ was missing from the response JSON format and has been added.")
+                responese_content = '{' + responese_content
+            return responese_content
         else:
             raise ValueError("Anthropic API response content is empty or malformed.")
             

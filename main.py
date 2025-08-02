@@ -25,9 +25,9 @@ import secrets
 sbx_id = os.getenv('SBX_ID', 'unknown')
 model_id = os.getenv('MODEL_ID', 'unknown').replace("/", "_")
 container_name = f"{sbx_id}_{model_id}"
-log_file_path = settings.LOG_DIR / f"app_{container_name}_{datetime.utcnow().strftime('%Y%m%d')}.log"
-
 run_id = secrets.token_hex(3)  # ex: 'a4f2c1'
+log_file_path = settings.LOG_DIR / f"app_{run_id}_{container_name}_{datetime.utcnow().strftime('%Y%m%d')}.log"
+
 logging.info(f"New execution started. This run's unique ID is: [ {run_id} ]")
     
 logging.basicConfig(
@@ -92,8 +92,8 @@ def main():
     total_start_time = time.time()
     
     # Load the master dataset once for the entire run.
-    # split = "train"  # Master
-    split = "test"  # Tester 10 Question
+    split = "train"  # Master
+    # split = "test"  # Tester 10 Question
     question_dataset = dataset_loader.load_pilot_dataset(split=split)      
 
     local_models = {}
@@ -123,7 +123,7 @@ def main():
     for trial_num in range(trial, settings.TOTAL_RUNS + 1): 
         
         # Get all configuration for the current trial from the session manager.
-        config = session_manager.next_session(sbx_id, model_id, split)
+        config = session_manager.next_session(run_id, sbx_id, model_id, split)
         config['run_id'] = run_id
         
         # Create a dedicated logger instance for this specific trial.
