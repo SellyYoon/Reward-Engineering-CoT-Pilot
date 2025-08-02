@@ -3,7 +3,7 @@
 # version: '3.8'
 services:
     sbx1:
-        container_name: 1_gpt-4.1-nano-2025-04-14
+        container_name: 1_gpt-4.1-2025-04-14
         build:
             context: .
             args:
@@ -12,7 +12,7 @@ services:
         env_file:
             - ../.env
         environment:
-            MODEL_ID: gpt-4.1-nano-2025-04-14
+            MODEL_ID: gpt-4.1-2025-04-14
             SBX_ID: 1
             HF_HOME: ${HF_CACHE_PATH}/huggingface
         volumes:
