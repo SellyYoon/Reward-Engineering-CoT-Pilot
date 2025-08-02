@@ -28,7 +28,7 @@ EVAL_MODELS = {"name": "claude-opus-4", "model_id": "claude-opus-4-20250514", "t
 
 # LLM generation parameters
 TEMPERATURE = float(os.getenv("TEMPERATURE", 0.3))
-MAX_NEW_TOKENS = int(os.getenv("MAX_NEW_TOKENS", 1024))
+MAX_NEW_TOKENS = int(os.getenv("MAX_NEW_TOKENS", 3072))
 TOP_P = float(os.getenv("TOP_P", 0.9))
 TOP_K = int(os.getenv("TOP_K", 50))
 REPETITION_PENALTY = float(os.getenv("REPETITION_PENALTY", 1.2))

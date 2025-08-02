@@ -17,17 +17,17 @@ logger = logging.getLogger(__name__)
 BACKUP_DIR = settings.BACKUP_DIR
 STATE_FILE = os.path.join(BACKUP_DIR, f"{os.environ.get('MODEL_ID', 'unknown_model_id')}_session.json")
 
-def load_state(sbx_id: int) -> dict:
+def load_state(run_id: str, sbx_id: int) -> dict:
     """Load the state for a specific SBX_ID from a file."""
-    state_file = os.path.join(settings.BACKUP_DIR, f"session_state_sbx{sbx_id}.json")
+    state_file = os.path.join(settings.BACKUP_DIR, f"session_state_{run_id}_sbx{sbx_id}.json")
     if os.path.exists(state_file):
         with open(state_file, "r") as f:
             return json.load(f)
     return {"current_trial": 0}
 
-def save_state(sbx_id: int, state: dict):
+def save_state(run_id: str, sbx_id: int, state: dict):
     """Save the state for a specific SBX_ID to a file."""
-    state_file = os.path.join(settings.BACKUP_DIR, f"session_state_sbx{sbx_id}.json")
+    state_file = os.path.join(settings.BACKUP_DIR, f"session_state_{run_id}_sbx{sbx_id}.json")
     with open(state_file, "w") as f:
         json.dump(state, f)
 

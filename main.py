@@ -28,7 +28,7 @@ container_name = f"{sbx_id}_{model_id}"
 log_file_path = settings.LOG_DIR / f"app_{container_name}_{datetime.utcnow().strftime('%Y%m%d')}.log"
 
 run_id = secrets.token_hex(3)  # ex: 'a4f2c1'
-logging.info(f"✅ New execution started. This run's unique ID is: [ {run_id} ]")
+logging.info(f"New execution started. This run's unique ID is: [ {run_id} ]")
     
 logging.basicConfig(
     level=logging.DEBUG,
@@ -85,15 +85,15 @@ def main():
     model_id = os.environ.get("MODEL_ID", "unknown_model_id") 
     print(f"{sbx_id}, {model_id}") 
 
-    current_state = session_manager.load_state(sbx_id)
+    current_state = session_manager.load_state(run_id, sbx_id)
     trial = current_state.get("current_trial", 0) + 1 
 
     MainLogger.log_process_start(sbx_id=sbx_id)
     total_start_time = time.time()
     
     # Load the master dataset once for the entire run.
-    split = "train"  # Master
-    # split = "test"  # Tester 10 Question
+    # split = "train"  # Master
+    split = "test"  # Tester 10 Question
     question_dataset = dataset_loader.load_pilot_dataset(split=split)      
 
     local_models = {}
@@ -149,7 +149,7 @@ def main():
         trial_logger.log_event("TRIAL_FINISH", {"time_taken": time_taken})
 
         # Update the state file to mark this trial as successfully completed.
-        session_manager.save_state(sbx_id, {"current_trial": trial_num})
+        session_manager.save_state(run_id, sbx_id, {"current_trial": trial_num})
         
         # if not container_name:
         #     MainLogger._log("The environment variable cannot be found. Please check the docker-compose.yml file.", {"CONTAINER_NAME": container_name})

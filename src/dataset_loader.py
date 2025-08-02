@@ -22,14 +22,14 @@ def get_reference_counts(config: dict, question_num: int) -> dict:
     ds = load_pilot_dataset(config['split'])
     question_index = question_num - 1
 
-    # 안전장치: 혹시 모를 인덱스 오류를 방지
     if not 0 <= question_index < len(ds):
         logging.error(f"The requested question_num({question_num}) is outside the dataset range.")
         return {"branch_count": 0, "loop_count": 0, "variable_count": 0}
+    
     return {
-        "branch_count": ds[question_num].get("branch_count", 0),
-        "loop_count":   ds[question_num].get("loop_count", 0),
-        "variable_count":ds[question_num].get("variable_count", 0)
+        "branch_count": ds[question_index].get("branch_count", 0),
+        "loop_count":   ds[question_index].get("loop_count", 0),
+        "variable_count":ds[question_index].get("variable_count", 0)
     }
 
 # --- Independent Test Block ---

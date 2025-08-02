@@ -122,7 +122,6 @@ def extract_fields_manually(response_content: str) -> dict:
             items = [item.strip().strip('"\'') for item in items_str.split(',') if item.strip()]
             return items
             
-        # 일반 텍스트 값은 앞뒤 따옴표와 공백 제거
         return val.strip().strip('"\'')
 
     # --- 1. Solver model field extraction ---
